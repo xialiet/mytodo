@@ -1,15 +1,13 @@
 # MyTodo · 待办 · 打卡 · AI Agent 联动
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Release](https://img.shields.io/github/v/release/xialiet/mytodo?include_prereleases)](https://github.com/xialiet/mytodo/releases)
+[![Docker](https://img.shields.io/badge/Docker-✓-2496ED.svg)](#-快速开始)
+
 > 一个自托管的待办 + 打卡应用，开放 REST API 让 AI Agent 读写你的数据。
 >
 > 大多数待办 App 把你的数据锁在云端——漂亮、好用，但 **AI 够不到**。
 > MyTodo 反过来：自托管、数据归你、全部 API 对 AI 敞开。
->
-> **别人给你一个界面，MyTodo 把底层递给 AI。**
-
-> 大多数待办 App 把你的数据锁在云端——漂亮、好用，但 **AI 够不到**。
->
-> MyTodo 反过来：自托管、数据归你、全部通过 REST API 敞开给 AI Agent。
 >
 > **别人给你一个界面，MyTodo 把底层递给 AI。**
 
