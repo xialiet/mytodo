@@ -1,0 +1,726 @@
+{% extends "base.html" %}
+
+{% block title %}MyTodo - 打卡{% endblock %}
+
+{% block content %}
+<!-- 背景装饰：低透明度模糊光斑 -->
+<div class="pointer-events-none fixed inset-0 overflow-hidden" aria-hidden="true">
+  <div class="absolute -top-24 -left-24 w-72 h-72 rounded-full bg-emerald-200/40 blur-3xl"></div>
+  <div class="absolute top-1/3 -right-28 w-80 h-80 rounded-full bg-teal-200/30 blur-3xl"></div>
+  <div class="absolute bottom-0 left-1/4 w-64 h-64 rounded-full bg-cyan-100/40 blur-3xl"></div>
+</div>
+
+<div class="relative max-w-3xl mx-auto px-4 py-6 md:py-8">
+
+  <div class="flex items-center justify-between mb-6">
+    <div>
+      <h1 class="text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
+        <svg class="w-7 h-7 text-emerald-500 cursor-pointer" onclick="openSettings()" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        今日打卡
+      </h1>
+      <p class="text-sm text-slate-500 mt-1" id="checkin-stats">加载中...</p>
+    </div>
+  </div>
+
+  <!-- 顶部细条进度（替代原 Hero 大块） -->
+  <div class="flex items-center gap-3 mb-5 px-1">
+    <div class="flex-1 h-1.5 bg-slate-200 rounded-full overflow-hidden">
+      <div id="hero-bar" class="h-full bg-emerald-500 rounded-full" style="width:0%; transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1)"></div>
+    </div>
+    <div class="text-xs font-bold text-slate-700 tabular-nums"><span id="checkin-done">0</span><span class="text-slate-400 font-medium">/<span id="checkin-target">0</span></span></div>
+    <div class="text-xs text-emerald-600 font-bold tabular-nums" id="hero-pct">0%</div>
+  </div>
+
+  <!-- Streaks 风单卡聚焦容器 -->
+  <div id="checkin-stage" class="relative"></div>
+
+  <!-- 卡片导航小点（当前位置指示） -->
+  <div id="stage-nav" class="flex justify-center gap-1.5 my-5"></div>
+
+  <!-- 添加新打卡项（折叠） -->
+  <details class="bg-white/60 rounded-2xl border border-slate-200 mb-6">
+    <summary class="px-4 py-3 cursor-pointer select-none flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-slate-700">
+      <svg class="w-4 h-4 text-slate-400 transition-transform" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+      添加打卡项
+    </summary>
+    <form id="add-checkin-form" class="px-4 pb-4 space-y-3 anim-slide-up">
+      <div>
+        <input type="text" id="add-checkin-title" placeholder="打卡项名称（如：喝一杯水）" maxlength="200" required
+               class="w-full h-11 px-3 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-brand-200 focus:border-brand-400">
+      </div>
+      <div class="flex flex-wrap items-center gap-2">
+        <span class="text-xs font-semibold text-slate-400">图标</span>
+        <div class="inline-flex rounded-full bg-slate-100 p-0.5 text-base">
+          <button type="button" data-icon="✅" class="px-2.5 py-1.5 rounded-full bg-white shadow-sm">✅</button>
+          <button type="button" data-icon="💧" class="px-2.5 py-1.5 rounded-full">💧</button>
+          <button type="button" data-icon="📚" class="px-2.5 py-1.5 rounded-full">📚</button>
+          <button type="button" data-icon="🏃" class="px-2.5 py-1.5 rounded-full">🏃</button>
+          <button type="button" data-icon="🧘" class="px-2.5 py-1.5 rounded-full">🧘</button>
+          <button type="button" data-icon="💤" class="px-2.5 py-1.5 rounded-full">💤</button>
+          <button type="button" data-icon="🍎" class="px-2.5 py-1.5 rounded-full">🍎</button>
+        </div>
+        <span class="text-xs font-semibold text-slate-400 ml-2">颜色</span>
+        <div class="inline-flex gap-1.5" id="add-checkin-color">
+          <button type="button" data-color="#10b981" class="w-7 h-7 rounded-full ring-2 ring-offset-2 ring-emerald-500" style="background:#10b981"></button>
+          <button type="button" data-color="#0891b2" class="w-7 h-7 rounded-full" style="background:#0891b2"></button>
+          <button type="button" data-color="#2563eb" class="w-7 h-7 rounded-full" style="background:#2563eb"></button>
+          <button type="button" data-color="#9333ea" class="w-7 h-7 rounded-full" style="background:#9333ea"></button>
+          <button type="button" data-color="#dc2626" class="w-7 h-7 rounded-full" style="background:#dc2626"></button>
+          <button type="button" data-color="#f59e0b" class="w-7 h-7 rounded-full" style="background:#f59e0b"></button>
+        </div>
+      </div>
+      <div class="flex flex-wrap items-center gap-2">
+        <span class="text-xs font-semibold text-slate-400">目标</span>
+        <input type="number" id="add-checkin-target" min="0" value="1" class="text-sm w-20 px-3 py-1.5 rounded-full bg-slate-100 border-0 focus:ring-2 focus:ring-brand-300">
+        <span class="text-xs text-slate-500">次/天（0 = 不限）</span>
+        <span class="text-xs font-semibold text-slate-400 ml-2">分类</span>
+        <select id="add-checkin-category" class="text-sm px-3 py-1.5 rounded-full bg-slate-100 border-0 focus:ring-2 focus:ring-brand-300">
+          <option value="">无分类</option>
+          {% for cat in categories %}
+          <option value="{{ cat.id }}">{{ cat.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="flex justify-end">
+        <button type="submit" class="px-5 h-10 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold transition-colors shadow-sm">添加打卡项</button>
+      </div>
+    </form>
+  </details>
+
+  <!-- 管理打卡项（折叠） -->
+  <details class="bg-white/60 rounded-2xl border border-slate-200 mb-6">
+    <summary class="px-4 py-3 cursor-pointer select-none flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-slate-700">
+      <svg class="w-4 h-4 text-slate-400 transition-transform" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+      管理打卡项
+    </summary>
+    <div id="manage-list" class="px-4 pb-4 space-y-2"></div>
+  </details>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const COLORS = ['#10b981', '#0891b2', '#2563eb', '#9333ea', '#dc2626', '#f59e0b'];
+let newIcon = '✅';
+let newColor = '#10b981';
+let allCheckinItems = [];
+
+// 图标选择
+document.querySelectorAll('#add-checkin-form [data-icon]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#add-checkin-form [data-icon]').forEach(b => {
+      b.className = 'px-2.5 py-1.5 rounded-full';
+    });
+    btn.className = 'px-2.5 py-1.5 rounded-full bg-white shadow-sm';
+    newIcon = btn.dataset.icon;
+  });
+});
+
+// 颜色选择
+document.querySelectorAll('#add-checkin-color [data-color]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#add-checkin-color [data-color]').forEach(b => {
+      b.className = 'w-7 h-7 rounded-full';
+    });
+    btn.className = 'w-7 h-7 rounded-full ring-2 ring-offset-2 ring-slate-700';
+    newColor = btn.dataset.color;
+  });
+});
+
+function formatTime(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return d.toLocaleTimeString('zh-CN', {hour: '2-digit', minute: '2-digit'});
+}
+
+// 把 hex 颜色按比例变暗（amount: 0-1）
+function darkenColor(hex, amount) {
+  const h = hex.replace('#', '');
+  const r = parseInt(h.substr(0, 2), 16);
+  const g = parseInt(h.substr(2, 2), 16);
+  const b = parseInt(h.substr(4, 2), 16);
+  const dr = Math.max(0, Math.round(r * (1 - amount)));
+  const dg = Math.max(0, Math.round(g * (1 - amount)));
+  const db = Math.max(0, Math.round(b * (1 - amount)));
+  return '#' + [dr, dg, db].map(v => v.toString(16).padStart(2, '0')).join('');
+}
+
+// hex + 透明度 → rgba
+function hexToRgba(hex, alpha) {
+  const h = hex.replace('#', '');
+  const r = parseInt(h.substr(0, 2), 16);
+  const g = parseInt(h.substr(2, 2), 16);
+  const b = parseInt(h.substr(4, 2), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+// 取标题首字符（中文取第一个字，英文取首字母大写）
+function getInitial(title) {
+  if (!title) return '?';
+  const t = title.trim();
+  // 中文/日文/韩文范围：取首字
+  if (/[一-鿿぀-ヿ가-힯]/.test(t[0])) return t[0];
+  // 英文：取首字母大写
+  return t[0].toUpperCase();
+}
+
+async function loadCheckin() {
+  const r = await apiFetch('/api/checkin/items', {silent: true});
+  if (!r.ok) { showToast('加载打卡项失败', 'error'); return; }
+  allCheckinItems = r.data;
+  renderCheckinItems();
+  renderManageList();
+  updateHeaderStats();
+}
+
+function computeStreak(itemLogs) {
+  // itemLogs: array of {date, count} for past 365 days
+  const days = new Set();
+  for (const l of itemLogs) {
+    if (l.count > 0) days.add(l.date);
+  }
+  let streak = 0;
+  const today = new Date();
+  for (let i = 0; i < 365; i++) {
+    const d = new Date(today); d.setDate(d.getDate() - i);
+    const key = localDateStr(d);  // 本地日期，与后端 CST date 一致
+    if (days.has(key)) streak++;
+    else if (i > 0) break;
+  }
+  return streak;
+}
+
+// Stage 状态：当前展示哪个习惯
+let currentStageIndex = 0;
+let streaksMap = {}; // {item_id: streak_count}
+let logsMap = {};    // {item_id: last7_logs}
+
+function renderCheckinItems() {
+  const stage = document.getElementById('checkin-stage');
+  const nav = document.getElementById('stage-nav');
+
+  if (allCheckinItems.length === 0) {
+    stage.innerHTML = `
+    <div class="text-center py-20">
+      <div class="inline-flex items-center justify-center w-20 h-20 rounded-full bg-emerald-100 text-4xl mb-4 shadow-sm">🌱</div>
+      <p class="text-sm font-medium text-slate-600">还没有打卡项</p>
+      <p class="mt-1 text-xs text-slate-400">点击下方「添加打卡项」，种下第一个习惯</p>
+    </div>`;
+    nav.innerHTML = '';
+    updateHeaderStats();
+    return;
+  }
+
+  // 防越界
+  if (currentStageIndex >= allCheckinItems.length) currentStageIndex = allCheckinItems.length - 1;
+  if (currentStageIndex < 0) currentStageIndex = 0;
+
+  renderStageCard('fade');
+  renderStageNav();
+
+  // 异步加载所有习惯的 logs（首次进入）：一次批量请求，替代逐项 N 次
+  if (Object.keys(logsMap).length === 0) {
+    apiFetch('/api/checkin/logs/batch?days=365', {silent: true})
+      .then(r => {
+        if (!r.ok) return;
+        for (const [iid, logs] of Object.entries(r.data)) {
+          streaksMap[iid] = computeStreak(logs);
+          logsMap[iid] = logs.slice(-14); // 保留 14 天供 mini-bar 用
+        }
+        renderStageCard('fade');
+        renderStageNav();
+      });
+  }
+}
+
+// 构建单张 stage 卡 HTML（当前卡与拖拽预览的相邻卡共用）
+function buildCardHTML(it, extraCls) {
+  const target = it.target_per_day;
+  const count = it.today_count;
+  const reached = target > 0 && count >= target;
+  const color = it.color || '#10b981';
+  const streak = streaksMap[it.id] || 0;
+  const last14 = logsMap[it.id] || [];
+  const lastLog = (it.today_logs && it.today_logs.length) ? it.today_logs[0] : null;
+
+  // 卡片底色：未点亮 = 主题色淡彩，点亮 = 主题色渐变 + 高光 + 彩色投影
+  const cardStyle = reached
+    ? `background: radial-gradient(130% 100% at 15% 0%, rgba(255,255,255,0.28) 0%, rgba(255,255,255,0) 55%), linear-gradient(160deg, ${color}, ${darkenColor(color, 0.25)}); box-shadow: 0 20px 40px -12px ${hexToRgba(color, 0.45)};`
+    : `background: color-mix(in srgb, ${color} 7%, #ffffff); border: 1px solid color-mix(in srgb, ${color} 35%, #e2e8f0); box-shadow: 0 1px 3px rgba(15,23,42,0.04);`;
+
+  return `
+  <div class="stage-card ${reached ? 'is-lit' : 'is-dim'} ${extraCls || ''}"
+       style="${cardStyle}"
+       data-checkin="${it.id}" role="button" tabindex="0" aria-label="打卡 ${escapeHtml(it.title)}, 今日 ${count}/${target > 0 ? target : '不限'}, 连续 ${streak} 天">
+    <div class="relative px-6 pt-12 pb-8 flex flex-col items-center text-center">
+      <!-- 大 icon (点亮态放大 + 浮起) -->
+      <div class="stage-emoji text-7xl mb-6 transition-all duration-500 ${reached ? 'scale-110 -translate-y-1' : 'opacity-70'}">${it.icon || '✅'}</div>
+
+      <!-- 标题（truncate 保持单行，防止换行撑高卡片） -->
+      <div class="text-2xl font-black mb-1 max-w-full truncate transition-colors duration-500 ${reached ? 'text-white' : 'text-slate-800'}">${escapeHtml(it.title)}</div>
+
+      <!-- 副信息 -->
+      <div class="text-sm font-medium mb-6 transition-colors duration-500 ${reached ? 'text-white/80' : 'text-slate-400'}">
+        ${target > 0 ? `${count} / ${target} 次` : `${count} 次`}${lastLog ? ` · 最近 ${formatTime(lastLog.checked_at)}` : ''}
+      </div>
+
+      <!-- 连续天数徽章（≥7 天火焰渐变，≥30 天钻石） -->
+      ${streak > 0 ? `
+      <div class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full mb-6 transition-all duration-500 ${reached ? 'bg-white/25' : streak >= 30 ? 'bg-gradient-to-r from-violet-500 to-indigo-500 shadow-sm' : streak >= 7 ? 'bg-gradient-to-r from-orange-500 to-red-500 shadow-sm' : 'bg-orange-50'}">
+        <span class="text-sm">${streak >= 30 ? '💎' : '🔥'}</span>
+        <span class="text-sm font-bold tabular-nums ${reached || streak >= 7 ? 'text-white' : 'text-orange-600'}">连续 ${streak} 天</span>
+      </div>` : '<div class="mb-6 h-8"></div>'}
+
+      <!-- 14-day mini bar（高度按该项历史最大值归一化） -->
+      <div class="mb-6 flex flex-col items-center">
+        <div class="flex items-end gap-1.5 h-8">
+          ${(() => {
+            if (!last14.length) return `<div class="text-xs ${reached ? 'text-white/40' : 'text-slate-300'}">暂无历史</div>`;
+            const maxC = Math.max(...last14.map(d => d.count), 1);
+            return last14.map((day, i) => {
+              const isToday = i === last14.length - 1;
+              const hasLog = day.count > 0;
+              const h = hasLog ? Math.round(8 + (day.count / maxC) * 24) : 4;
+              const c = hasLog ? (reached ? 'rgba(255,255,255,0.7)' : color) : (reached ? 'rgba(255,255,255,0.15)' : '#e2e8f0');
+              const ring = isToday ? (reached ? 'outline outline-2 outline-white/60 outline-offset-1' : 'outline outline-2 outline-slate-400 outline-offset-1') : '';
+              return `<div class="w-2 rounded-full ${ring}" style="height:${h}px; background-color:${c}" title="${day.date}: ${day.count}次"></div>`;
+            }).join('');
+          })()}
+        </div>
+        <!-- 日期刻度行始终渲染（无数据时留空），保证所有卡片等高 -->
+        <div class="flex justify-between w-full mt-1.5 text-[10px] tabular-nums ${reached ? 'text-white/50' : 'text-slate-300'}">
+          <span>${last14.length ? last14[0].date.slice(5) : ''}</span>
+          <span>${last14.length ? '今天' : ''}</span>
+        </div>
+      </div>
+
+      <!-- 完成按钮 / 已完成态（h-12 固定高，两态等高） -->
+      <div class="mt-auto h-12 flex flex-col items-center justify-center">
+        ${reached
+          ? `<div class="text-lg font-bold text-white">✓ 已完成</div>
+             <div class="text-xs text-white/70 mt-1">再点一次 +1</div>`
+          : `<div class="text-sm font-semibold text-slate-400">轻点卡片完成打卡</div>`}
+      </div>
+    </div>
+
+    <!-- 顶部计数器（多目标时显示） -->
+    ${target > 1 ? `
+    <div class="absolute top-4 right-4 px-2.5 py-1 rounded-full text-xs font-bold tabular-nums ${reached ? 'bg-white/25 text-white' : 'bg-slate-100 text-slate-600'}">
+      ${count}/${target}
+    </div>` : ''}
+  </div>`;
+}
+
+// 渲染当前 stage 卡（单卡聚焦）
+// direction: 'next' | 'prev' | 'fade' | 'none' | undefined
+function renderStageCard(direction) {
+  const stage = document.getElementById('checkin-stage');
+  if (!stage || allCheckinItems.length === 0) return;
+  const it = allCheckinItems[currentStageIndex];
+
+  // 决定动画 class（'none' = 拖拽结算后直接替换，无动画）
+  let enterCls = 'enter-fade';
+  let exitCls = 'exit-fade';
+  if (direction === 'next') { enterCls = 'enter-from-right'; exitCls = 'exit-to-left'; }
+  else if (direction === 'prev') { enterCls = 'enter-from-left'; exitCls = 'exit-to-right'; }
+  else if (direction === 'none') { enterCls = ''; exitCls = ''; }
+
+  if (direction === 'none') {
+    // 拖拽结算：拖动的卡和预览卡在 DOM 里已就位，直接全部清掉重建
+    stage.querySelectorAll('.stage-card').forEach(c => c.remove());
+  } else {
+    // 清理所有残留卡（孤儿卡 / 已在 exit 状态但未销毁的卡）
+    // 然后只保留当前活动卡，避免 grid 里卡片堆积
+    const allCards = stage.querySelectorAll('.stage-card');
+    allCards.forEach(c => {
+      if (c.classList.contains(exitCls) || c.classList.contains('exit-to-left') || c.classList.contains('exit-to-right') || c.classList.contains('exit-fade')) {
+        c.remove(); // 已在退出态的卡立即清理（孤儿）
+      }
+    });
+
+    // 当前活动卡（不含 exit class）标记为 exit
+    const oldCard = stage.querySelector('.stage-card:not(.exit-to-left):not(.exit-to-right):not(.exit-fade)');
+    if (oldCard) {
+      oldCard.style.zIndex = '1';
+      oldCard.classList.add(exitCls);
+      oldCard.style.pointerEvents = 'none';
+      // 双保险：animationend + setTimeout 兜底，防止 animationcancel 导致孤儿
+      let removed = false;
+      const cleanup = () => { if (!removed) { removed = true; oldCard.remove(); } };
+      oldCard.addEventListener('animationend', cleanup, {once: true});
+      oldCard.addEventListener('animationcancel', cleanup, {once: true});
+      setTimeout(cleanup, 450); // 动画 350ms + 100ms 兜底
+    }
+  }
+
+  const html = buildCardHTML(it, enterCls);
+
+  // 新卡插入 grid，与旧卡叠在同一 cell。新卡 z-index 高，盖在旧卡之上
+  const tmp = document.createElement('div');
+  tmp.innerHTML = html;
+  const newCard = tmp.firstElementChild;
+  newCard.style.zIndex = '2';
+  stage.appendChild(newCard);
+
+  bindStageCard(newCard, it.color || '#10b981');
+}
+
+// 点击处扩散 ripple
+function spawnRipple(card, x, y) {
+  const rect = card.getBoundingClientRect();
+  const size = Math.max(rect.width, rect.height);
+  const r = document.createElement('span');
+  r.className = 'checkin-ripple';
+  r.style.width = r.style.height = size + 'px';
+  r.style.left = (x - rect.left - size / 2) + 'px';
+  r.style.top = (y - rect.top - size / 2) + 'px';
+  r.style.background = card.classList.contains('is-lit') ? 'rgba(255,255,255,0.4)' : 'rgba(100,116,139,0.18)';
+  card.appendChild(r);
+  r.addEventListener('animationend', () => r.remove(), {once: true});
+}
+
+// 达标时 emoji 周围爆开 ✨ 粒子
+function spawnSparkles(card) {
+  const em = card.querySelector('.stage-emoji');
+  if (!em) return;
+  const rect = em.getBoundingClientRect();
+  const crect = card.getBoundingClientRect();
+  const cx = rect.left - crect.left + rect.width / 2;
+  const cy = rect.top - crect.top + rect.height / 2;
+  const glyphs = ['✨', '⭐', '✨', '💫', '✨', '⭐', '✨', '💫'];
+  glyphs.forEach((g, i) => {
+    const s = document.createElement('span');
+    s.className = 'checkin-sparkle';
+    s.textContent = g;
+    const ang = (i / glyphs.length) * Math.PI * 2;
+    const dist = 60 + Math.random() * 50;
+    s.style.setProperty('--dx', Math.cos(ang) * dist + 'px');
+    s.style.setProperty('--dy', Math.sin(ang) * dist + 'px');
+    s.style.left = cx + 'px';
+    s.style.top = cy + 'px';
+    card.appendChild(s);
+    s.addEventListener('animationend', () => s.remove(), {once: true});
+  });
+}
+
+// 绑定单卡的交互（点击 / 键盘 / 跟手拖拽 swipe）
+function bindStageCard(card, color) {
+  if (!card) return;
+  const trigger = () => doCheckin(parseInt(card.dataset.checkin));
+
+  // 拖拽状态
+  let startX = 0, startY = 0, curDx = 0, isDragging = false, swiped = false, lockedAxis = null;
+  let neighborCard = null, neighborDir = 0; // 1 = next（从右进）, -1 = prev（从左进）
+  let lastX = 0, lastT = 0, vx = 0;         // 速度跟踪（px/ms）
+  const SNAP_MS = 280;
+  const EASE = 'cubic-bezier(0.16, 1, 0.3, 1)';
+
+  const removeNeighbor = () => {
+    if (neighborCard) { neighborCard.remove(); neighborCard = null; neighborDir = 0; }
+  };
+
+  // 创建/替换拖拽方向上的相邻预览卡
+  const ensureNeighbor = (dir) => {
+    if (neighborCard && neighborDir === dir) return;
+    removeNeighbor();
+    const nIdx = currentStageIndex + dir;
+    if (nIdx < 0 || nIdx >= allCheckinItems.length) return;
+    const tmp = document.createElement('div');
+    tmp.innerHTML = buildCardHTML(allCheckinItems[nIdx], '');
+    neighborCard = tmp.firstElementChild;
+    neighborCard.style.zIndex = '1';
+    neighborCard.style.pointerEvents = 'none';
+    neighborCard.tabIndex = -1;
+    neighborCard.setAttribute('aria-hidden', 'true');
+    neighborCard.style.transform = `translateX(${dir * card.offsetWidth}px)`;
+    neighborCard.style.opacity = '0';
+    document.getElementById('checkin-stage').appendChild(neighborCard);
+    neighborDir = dir;
+  };
+
+  const onStart = (clientX, clientY) => {
+    startX = clientX; startY = clientY; curDx = 0;
+    lastX = clientX; lastT = performance.now(); vx = 0;
+    isDragging = true; swiped = false; lockedAxis = null;
+  };
+
+  const onMove = (clientX, clientY, ev) => {
+    if (!isDragging) return;
+    const dx = clientX - startX;
+    const dy = clientY - startY;
+    // 锁定方向：第一次越过 10px 时确定是横向还是纵向
+    if (!lockedAxis && (Math.abs(dx) > 10 || Math.abs(dy) > 10)) {
+      lockedAxis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+      if (lockedAxis === 'x') { swiped = true; card.style.transition = 'none'; }
+    }
+    if (lockedAxis !== 'x') return;
+    // 横向 swipe：阻止页面滚动，避免整页跟着动
+    if (ev && ev.cancelable) ev.preventDefault();
+
+    // 指数平滑速度
+    const now = performance.now();
+    const dt = now - lastT;
+    if (dt > 0) { vx = 0.7 * vx + 0.3 * ((clientX - lastX) / dt); lastX = clientX; lastT = now; }
+    curDx = dx;
+
+    const W = card.offsetWidth;
+    if (dx === 0) { card.style.transform = ''; removeNeighbor(); return; }
+    const dir = dx < 0 ? 1 : -1;
+    const hasNeighbor = currentStageIndex + dir >= 0 && currentStageIndex + dir < allCheckinItems.length;
+
+    if (hasNeighbor) {
+      ensureNeighbor(dir);
+      const p = Math.min(Math.abs(dx) / W, 1); // 拖动进度 0~1
+      card.style.transform = `translateX(${dx}px)`;
+      if (neighborCard) {
+        neighborCard.style.transform = `translateX(${dx + dir * W}px)`;
+        neighborCard.style.opacity = String(Math.min(1, p * 1.4)); // 随进度淡入
+      }
+    } else {
+      // 边界橡皮筋：阻尼 0.3
+      removeNeighbor();
+      card.style.transform = `translateX(${dx * 0.3}px)`;
+    }
+  };
+
+  const onEnd = () => {
+    if (!isDragging) return;
+    isDragging = false;
+    if (lockedAxis !== 'x') { lockedAxis = null; return; }
+    lockedAxis = null;
+
+    const W = card.offsetWidth;
+    // 快速甩动（flick）也可触发切换
+    const flick = neighborCard && Math.abs(vx) > 0.4 && Math.sign(vx) === -neighborDir;
+    const shouldSwitch = !!neighborCard && (Math.abs(curDx) > W * 0.28 || flick);
+    const dir = neighborDir;
+
+    card.style.transition = `transform ${SNAP_MS}ms ${EASE}`;
+    card.style.transform = shouldSwitch ? `translateX(${-dir * W}px)` : '';
+    if (neighborCard) {
+      neighborCard.style.transition = `transform ${SNAP_MS}ms ${EASE}, opacity ${SNAP_MS}ms ${EASE}`;
+      neighborCard.style.transform = shouldSwitch ? 'translateX(0px)' : `translateX(${dir * W}px)`;
+      neighborCard.style.opacity = shouldSwitch ? '1' : '0';
+    }
+
+    setTimeout(() => {
+      if (shouldSwitch) {
+        currentStageIndex += dir;
+        renderStageCard('none');
+        renderStageNav();
+      } else {
+        card.style.transition = '';
+        card.style.transform = '';
+        removeNeighbor();
+      }
+    }, SNAP_MS + 40);
+  };
+
+  // 触屏：touchmove 非 passive，允许 preventDefault 阻止页面横向滚动
+  card.addEventListener('touchstart', (e) => onStart(e.touches[0].clientX, e.touches[0].clientY), {passive: true});
+  card.addEventListener('touchmove', (e) => onMove(e.touches[0].clientX, e.touches[0].clientY, e), {passive: false});
+  card.addEventListener('touchend', onEnd);
+  card.addEventListener('touchcancel', onEnd);
+
+  // 鼠标拖拽
+  card.addEventListener('mousedown', (e) => { e.preventDefault(); onStart(e.clientX, e.clientY); });
+  card.addEventListener('mousemove', (e) => { if (isDragging) onMove(e.clientX, e.clientY, e); });
+  card.addEventListener('mouseup', onEnd);
+  card.addEventListener('mouseleave', onEnd);
+  card.addEventListener('click', (e) => {
+    if (!swiped) { spawnRipple(card, e.clientX, e.clientY); trigger(); }
+  });
+  card.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      const rect = card.getBoundingClientRect();
+      spawnRipple(card, rect.left + rect.width / 2, rect.top + rect.height / 2);
+      trigger();
+    }
+    else if (e.key === 'ArrowLeft' && currentStageIndex > 0) { currentStageIndex--; renderStageCard('prev'); renderStageNav(); }
+    else if (e.key === 'ArrowRight' && currentStageIndex < allCheckinItems.length - 1) { currentStageIndex++; renderStageCard('next'); renderStageNav(); }
+  });
+  card.addEventListener('selectstart', (e) => { if (isDragging) e.preventDefault(); });
+}
+
+// 渲染导航小点（可点击跳转）
+function renderStageNav() {
+  const nav = document.getElementById('stage-nav');
+  if (!nav) return;
+  nav.innerHTML = allCheckinItems.map((it, i) => {
+    const active = i === currentStageIndex;
+    const reached = it.target_per_day > 0 && it.today_count >= it.target_per_day;
+    const itemColor = reached ? '#10b981' : (it.color || '#10b981');
+    const bg = active ? itemColor : hexToRgba(itemColor, 0.3);
+    return `<button class="nav-dot transition-all duration-300 ${active ? 'w-6' : 'w-2'} h-2 rounded-full"
+                    style="background-color:${bg}"
+                    data-index="${i}" aria-label="切换到第 ${i+1} 个习惯 ${escapeHtml(it.title)}"></button>`;
+  }).join('');
+  nav.querySelectorAll('[data-index]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const newIndex = parseInt(btn.dataset.index);
+      if (newIndex === currentStageIndex) return;
+      const dir = newIndex > currentStageIndex ? 'next' : 'prev';
+      currentStageIndex = newIndex;
+      renderStageCard(dir);
+      renderStageNav();
+    });
+  });
+}
+
+function renderManageList() {
+  const container = document.getElementById('manage-list');
+  if (allCheckinItems.length === 0) {
+    container.innerHTML = '<p class="text-xs text-slate-400 text-center py-2">还没有打卡项</p>';
+    return;
+  }
+  container.innerHTML = allCheckinItems.map(it => {
+    const color = it.color || '#10b981';
+    return `
+    <div class="flex items-center gap-2 p-2.5 rounded-xl bg-white">
+      <div class="checkin-icon-sm" style="--icon-color:${color}">${it.icon || '✅'}</div>
+      <div class="flex-1 min-w-0">
+        <div class="text-sm font-semibold text-slate-700 truncate">${escapeHtml(it.title)}</div>
+        <div class="text-xs text-slate-400">${it.target_per_day === 0 ? '不限次数' : '每天 ' + it.target_per_day + ' 次'}</div>
+      </div>
+      <button data-archive="${it.id}" class="btn-min w-8 h-8 rounded-lg text-slate-400 hover:text-amber-600 hover:bg-amber-50 flex items-center justify-center" title="归档">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/></svg>
+      </button>
+      <button data-delete-item="${it.id}" class="btn-min w-8 h-8 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 flex items-center justify-center" title="删除">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a2 2 0 012-2h2a2 2 0 012 2v3"/></svg>
+      </button>
+    </div>`;
+  }).join('');
+
+  container.querySelectorAll('[data-delete-item]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('删除这个打卡项？所有打卡记录也会被删除！')) return;
+      const id = parseInt(btn.dataset.deleteItem);
+      const r = await apiFetch(`/api/checkin/items/${id}`, {method: 'DELETE'});
+      if (r.ok) {
+        showToast('已删除', 'success');
+        loadCheckin();
+      }
+    });
+  });
+  container.querySelectorAll('[data-archive]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = parseInt(btn.dataset.archive);
+      const r = await apiFetch(`/api/checkin/items/${id}`, {
+        method: 'PATCH',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({is_archived: true}),
+      });
+      if (r.ok) {
+        showToast('已归档', 'success');
+        loadCheckin();
+      }
+    });
+  });
+}
+
+function updateHeaderStats() {
+  const items = allCheckinItems;
+  const done = items.filter(it => it.target_per_day > 0 && it.today_count >= it.target_per_day).length;
+  const totalTaps = items.reduce((s, it) => s + it.today_count, 0);
+  const target = items.length;
+  const pct = target > 0 ? Math.round(done / target * 100) : 0;
+  document.getElementById('checkin-done').textContent = done;
+  document.getElementById('checkin-target').textContent = target;
+  const pctEl = document.getElementById('hero-pct');
+  pctEl.textContent = pct + '%';
+  pctEl.className = 'text-xs font-bold tabular-nums ' + (target > 0 && pct === 100 ? 'text-amber-500' : pct >= 50 ? 'text-emerald-600' : 'text-slate-500');
+  const heroBar = document.getElementById('hero-bar');
+  heroBar.style.width = pct + '%';
+  heroBar.classList.toggle('is-full', target > 0 && pct === 100);
+
+  let s = items.length + ' 个打卡项';
+  if (totalTaps > 0) s += ' · 今日 ' + totalTaps + ' 次';
+  if (target > 0 && pct === 100) s += ' · 全部完成 🎉';
+  document.getElementById('checkin-stats').textContent = s;
+}
+
+async function doCheckin(id) {
+  const r = await apiFetch(`/api/checkin/items/${id}/log`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({}),
+  });
+  if (r.ok) {
+    playCompleteSound();
+    // 乐观更新：找到对应项 +1
+    const it = allCheckinItems.find(t => t.id === id);
+    if (it) {
+      const wasReached = it.target_per_day > 0 && it.today_count >= it.target_per_day;
+      it.today_count++;
+      const nowReached = it.target_per_day > 0 && it.today_count >= it.target_per_day;
+      const data = await r.json();
+      it.today_logs = [{id: data.id, checked_at: data.checked_at}, ...(it.today_logs || [])].slice(0, 5);
+      // 更新 logsMap（今日 +1）
+      if (logsMap[id]) {
+        const today = localDateStr();  // 本地日期，与后端 CST date 一致
+        const last = logsMap[id][logsMap[id].length - 1];
+        if (last && last.date === today) last.count++;
+        else logsMap[id].push({date: today, count: 1});
+      }
+      // 重渲染当前 stage 卡（触发点亮动画）+ nav + 顶部进度
+      renderStageCard('fade');
+      renderStageNav();
+      updateHeaderStats();
+      // 首次达成时触发点亮 pulse + 异步重拉 streak
+      if (!wasReached && nowReached) {
+        requestAnimationFrame(() => {
+          const stage = document.getElementById('checkin-stage');
+          const litCard = stage && stage.querySelector('.stage-card.is-lit:not(.exit-to-left):not(.exit-to-right):not(.exit-fade)');
+          if (litCard) {
+            litCard.classList.add('lit-pulse');
+            litCard.addEventListener('animationend', () => litCard.classList.remove('lit-pulse'), {once: true});
+            spawnSparkles(litCard);
+          }
+        });
+        apiFetch(`/api/checkin/items/${id}/logs?days=365`, {silent: true})
+          .then(rr => {
+            if (!rr.ok) return;
+            streaksMap[id] = computeStreak(rr.data);
+            logsMap[id] = rr.data.slice(-14);
+            renderStageCard('fade');
+            renderStageNav();
+          });
+      }
+    }
+  }
+}
+
+document.getElementById('add-checkin-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const title = document.getElementById('add-checkin-title').value.trim();
+  if (!title) return;
+  const target = parseInt(document.getElementById('add-checkin-target').value) || 0;
+  const cat = document.getElementById('add-checkin-category').value;
+  const body = {
+    title,
+    icon: newIcon,
+    color: newColor,
+    target_per_day: target,
+  };
+  if (cat) body.category_id = parseInt(cat);
+  const r = await apiFetch('/api/checkin/items', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(body),
+  });
+  if (r.ok) {
+    document.getElementById('add-checkin-title').value = '';
+    document.getElementById('add-checkin-target').value = '1';
+    document.getElementById('add-checkin-category').value = '';
+    showToast('已添加打卡项', 'success');
+    loadCheckin();
+  }
+});
+
+(async () => {
+  await loadCheckin();
+})();
+</script>
+{% endblock %}

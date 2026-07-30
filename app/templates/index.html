@@ -1,0 +1,592 @@
+{% extends "base.html" %}
+
+{% block title %}MyTodo - 我的待办{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto px-4 py-6 md:py-8">
+
+  <div class="flex items-end justify-between mb-6">
+    <div>
+      <h1 class="text-3xl font-bold tracking-tight text-slate-900 flex items-center gap-2.5">
+        <svg class="w-9 h-9 flex-shrink-0 cursor-pointer" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg" onclick="openSettings()">
+          <defs><linearGradient id="hbg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#6366f1"/><stop offset="100%" stop-color="#4f46e5"/></linearGradient></defs>
+          <rect x="16" y="16" width="480" height="480" rx="108" fill="url(#hbg)"/>
+          <rect x="140" y="100" width="8" height="312" rx="4" fill="rgba(255,255,255,0.25)"/>
+          <rect x="172" y="148" width="240" height="36" rx="18" fill="rgba(255,255,255,0.3)"/>
+          <rect x="172" y="238" width="200" height="36" rx="18" fill="rgba(255,255,255,0.3)"/>
+          <rect x="172" y="328" width="160" height="36" rx="18" fill="rgba(255,255,255,0.3)"/>
+          <circle cx="120" cy="166" r="30" fill="#10b981"/><path d="M104 166 L115 178 L138 154" fill="none" stroke="white" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="120" cy="256" r="30" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="5"/>
+          <circle cx="120" cy="346" r="30" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="5"/>
+        </svg>
+        MyTodo
+      </h1>
+      <p class="text-sm text-slate-500 mt-1" id="header-stats">加载中...</p>
+    </div>
+  </div>
+
+  <form id="quick-add" class="mb-5">
+    <div class="bg-white border border-slate-200 rounded-2xl shadow-sm focus-within:ring-2 focus-within:ring-brand-200 focus-within:border-brand-400 transition-all overflow-hidden">
+      <!-- 第一行：标题输入 + 展开/收起 -->
+      <div class="flex items-center gap-2">
+        <div class="pl-4 text-slate-400">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+        </div>
+        <input type="text" name="title" id="add-title" placeholder="添加新待办…" maxlength="200" required
+               class="flex-1 h-12 bg-transparent border-0 text-sm focus:ring-0 placeholder-slate-400">
+        <button type="button" id="toggle-expand" class="btn-min px-3 text-slate-400 hover:text-brand-600 transition-colors" title="更多选项">
+          <svg class="w-5 h-5 transition-transform" id="expand-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/></svg>
+        </button>
+      </div>
+      <!-- 展开区域：优先级、分类、截止日期、备注 -->
+      <div id="add-expanded" class="hidden border-t border-slate-100 px-4 pb-4 pt-3 space-y-3 anim-slide-up">
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="text-xs font-semibold text-slate-400 mr-1">优先级</span>
+          <div id="add-priority" class="inline-flex rounded-full bg-slate-100 p-0.5 text-xs font-semibold">
+            <button type="button" data-p="high" class="px-3 py-1.5 rounded-full text-slate-500 transition-colors">高</button>
+            <button type="button" data-p="medium" class="px-3 py-1.5 rounded-full bg-white text-brand-700 shadow-sm transition-colors">中</button>
+            <button type="button" data-p="low" class="px-3 py-1.5 rounded-full text-slate-500 transition-colors">低</button>
+          </div>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="text-xs font-semibold text-slate-400 mr-1">分类</span>
+          <select id="add-category" class="text-xs font-medium px-3 py-1.5 rounded-full bg-slate-100 text-slate-600 border-0 focus:ring-2 focus:ring-brand-300 cursor-pointer">
+            <option value="">无分类</option>
+            {% for cat in categories %}
+            <option value="{{ cat.id }}">{{ cat.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="text-xs font-semibold text-slate-400 mr-1">起止</span>
+          <input type="date" id="add-start" class="text-xs font-medium px-3 py-1.5 rounded-full bg-slate-100 text-slate-600 border-0 focus:ring-2 focus:ring-brand-300" title="开始日期（可选）">
+          <span class="text-xs text-slate-300">→</span>
+          <input type="date" id="add-due" class="text-xs font-medium px-3 py-1.5 rounded-full bg-slate-100 text-slate-600 border-0 focus:ring-2 focus:ring-brand-300" title="截止日期">
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="text-xs font-semibold text-slate-400 mr-1">重复</span>
+          <select id="add-recurrence" class="text-xs font-medium px-3 py-1.5 rounded-full bg-slate-100 text-slate-600 border-0 focus:ring-2 focus:ring-brand-300 cursor-pointer">
+            <option value="">不重复</option>
+            <option value="daily">每天</option>
+            <option value="weekly">每周</option>
+            <option value="biweekly">每两周</option>
+            <option value="monthly">每月</option>
+            <option value="custom">自定义天数</option>
+          </select>
+          <input type="number" id="add-recurrence-interval" min="1" placeholder="天数"
+                 class="hidden text-xs font-medium w-20 px-3 py-1.5 rounded-full bg-slate-100 text-slate-600 border-0 focus:ring-2 focus:ring-brand-300">
+          <label class="items-center gap-1.5 text-xs text-slate-500 cursor-pointer" id="add-copy-subtasks-label" style="display:none">
+            <input type="checkbox" id="add-copy-subtasks" class="rounded border-slate-300 text-brand-600 focus:ring-brand-500">
+            <span>复制子任务</span>
+          </label>
+        </div>
+        <div>
+          <textarea id="add-description" placeholder="备注（可选）" rows="2"
+                    class="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-200 focus:border-brand-400 resize-none leading-relaxed placeholder-slate-400"></textarea>
+        </div>
+        <div class="flex justify-end">
+          <button type="submit" class="px-5 h-10 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold transition-colors shadow-sm">
+            添加待办
+          </button>
+        </div>
+      </div>
+    </div>
+  </form>
+
+  <div id="cat-filter-wrap" class="mb-4 relative">
+    <button type="button" id="cat-filter-toggle" class="cat-chip btn-min px-3 py-1.5 rounded-full text-xs font-medium bg-slate-900 text-white whitespace-nowrap inline-flex items-center gap-1.5">
+      <span id="cat-filter-label" class="inline-flex items-center gap-1.5">全部分类</span>
+      <svg id="cat-filter-icon" class="w-3.5 h-3.5 transition-transform" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+    </button>
+    <div id="cat-filter-list" class="hidden absolute z-20 mt-2 bg-white rounded-xl border border-slate-200 shadow-lg p-2 flex flex-wrap gap-1.5 max-w-md">
+      <button data-cat="" class="cat-chip btn-min px-3 py-1.5 rounded-full text-xs font-medium bg-white text-slate-600 border border-slate-200 whitespace-nowrap hover:bg-slate-50">全部分类</button>
+      {% for cat in categories %}
+      <button data-cat="{{ cat.id }}" class="cat-chip btn-min px-3 py-1.5 rounded-full text-xs font-medium bg-white text-slate-600 border border-slate-200 whitespace-nowrap hover:bg-slate-50">
+        <span class="inline-block w-1.5 h-1.5 rounded-full mr-1.5 align-middle" style="background-color: {{ cat.color }}"></span>{{ cat.name }}
+      </button>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- 三栏分栏：已过期 / 今日 / 往后7天 -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6" id="todo-columns">
+    <!-- 已过期 -->
+    <div class="bg-white/60 rounded-2xl border border-slate-200 p-4">
+      <div class="flex items-center gap-2 mb-3">
+        <span class="w-2.5 h-2.5 rounded-full bg-red-500 pulse-dot"></span>
+        <h2 class="text-sm font-bold text-red-600">已过期</h2>
+        <span id="count-overdue" class="ml-auto text-xs font-semibold text-red-400 bg-red-50 px-2 py-0.5 rounded-full"></span>
+      </div>
+      <div id="col-overdue" class="space-y-2 min-h-[3rem]"></div>
+    </div>
+    <!-- 今日 -->
+    <div class="bg-white/60 rounded-2xl border border-slate-200 p-4">
+      <div class="flex items-center gap-2 mb-3">
+        <span class="w-2.5 h-2.5 rounded-full bg-brand-500 pulse-dot"></span>
+        <h2 class="text-sm font-bold text-brand-600">今日待办</h2>
+        <span id="count-today" class="ml-auto text-xs font-semibold text-brand-400 bg-brand-50 px-2 py-0.5 rounded-full"></span>
+      </div>
+      <div id="col-today" class="space-y-2 min-h-[3rem]"></div>
+    </div>
+    <!-- 往后7天 -->
+    <div class="bg-white/60 rounded-2xl border border-slate-200 p-4">
+      <div class="flex items-center gap-2 mb-3">
+        <span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span>
+        <h2 class="text-sm font-bold text-slate-700">往后 7 天</h2>
+        <span id="count-week" class="ml-auto text-xs font-semibold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full"></span>
+      </div>
+      <div id="col-week" class="space-y-2 min-h-[3rem]"></div>
+    </div>
+  </div>
+
+  <!-- 无截止日期（折叠） -->
+  <details id="section-no-date" class="hidden mb-6 bg-white/40 rounded-2xl border border-slate-200">
+    <summary class="px-4 py-3 cursor-pointer select-none flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-slate-700">
+      <svg class="w-4 h-4 text-slate-400 transition-transform" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+      无截止日期
+      <span id="count-no-date" class="text-xs font-semibold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full"></span>
+    </summary>
+    <div id="col-no-date" class="px-4 pb-4 space-y-2"></div>
+  </details>
+
+  <!-- 已完成（可折叠） -->
+  <details id="section-done" class="hidden mb-6 bg-white/40 rounded-2xl border border-slate-200">
+    <summary class="px-4 py-3 cursor-pointer select-none flex items-center gap-2 text-sm font-bold text-emerald-600 hover:text-emerald-700">
+      <svg class="w-4 h-4 text-emerald-400 transition-transform" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+      已完成
+      <span id="count-done" class="text-xs font-semibold text-emerald-400 bg-emerald-50 px-2 py-0.5 rounded-full"></span>
+    </summary>
+    <div id="col-done" class="px-4 pb-4 space-y-2"></div>
+  </details>
+
+  <div id="empty-state" class="hidden text-center py-16">
+    <svg class="mx-auto w-28 h-28" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+      <rect x="25" y="20" width="70" height="80" rx="8" fill="#f1f5f9"/>
+      <rect x="32" y="40" width="56" height="5" rx="2.5" fill="#cbd5e1"/>
+      <rect x="32" y="55" width="40" height="5" rx="2.5" fill="#e2e8f0"/>
+      <rect x="32" y="70" width="48" height="5" rx="2.5" fill="#e2e8f0"/>
+      <circle cx="85" cy="89" r="14" fill="white" stroke="#cbd5e1" stroke-width="2"/>
+      <path d="M79 89l4 4 8-8" fill="none" stroke="#6366f1" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <p class="mt-4 text-sm font-medium text-slate-600">还没有待办</p>
+    <p class="mt-1 text-xs text-slate-400">在上方输入框添加一个吧</p>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const PRIORITY_LABEL = {high: '高', medium: '中', low: '低'};
+const RECURRENCE_LABEL = {daily:'每天', weekly:'每周', biweekly:'双周', monthly:'每月', custom:'自定义'};
+let allTodos = [];
+let allCategories = [];
+let currentCat = '';
+let addPriority = 'medium';
+
+// 展开/收起添加表单
+document.getElementById('toggle-expand').addEventListener('click', () => {
+  const expanded = document.getElementById('add-expanded');
+  const icon = document.getElementById('expand-icon');
+  if (expanded.classList.contains('hidden')) {
+    expanded.classList.remove('hidden');
+    icon.style.transform = 'rotate(180deg)';
+  } else {
+    expanded.classList.add('hidden');
+    icon.style.transform = '';
+  }
+});
+
+// 添加表单：优先级选择
+document.querySelectorAll('#add-priority button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#add-priority button').forEach(b => {
+      b.className = 'px-3 py-1.5 rounded-full text-slate-500 transition-colors';
+    });
+    btn.className = 'px-3 py-1.5 rounded-full bg-white text-brand-700 shadow-sm transition-colors';
+    addPriority = btn.dataset.p;
+  });
+});
+
+// 默认截止日期为今天（本地日期，与后端 due_date 一致）
+const todayStr = localDateStr();
+document.getElementById('add-due').value = todayStr;
+document.getElementById('add-due').placeholder = '默认今天';
+
+// 添加表单：重复下拉联动
+document.getElementById('add-recurrence').addEventListener('change', function() {
+  const isCustom = this.value === 'custom';
+  const hasRecurrence = !!this.value;
+  document.getElementById('add-recurrence-interval').classList.toggle('hidden', !isCustom);
+  document.getElementById('add-copy-subtasks-label').style.display = hasRecurrence ? 'flex' : 'none';
+});
+
+// 详情面板：重复下拉联动
+document.getElementById('detail-recurrence').addEventListener('change', function() {
+  const isCustom = this.value === 'custom';
+  const hasRecurrence = !!this.value;
+  document.getElementById('detail-recurrence-interval').classList.toggle('hidden', !isCustom);
+  document.getElementById('detail-copy-subtasks-label').style.display = hasRecurrence ? 'flex' : 'none';
+  scheduleDetailSave();
+});
+
+function isOverdue(t) {
+  if (t.status === 'done' || !t.due_date) return false;
+  const today = new Date(); today.setHours(0,0,0,0);
+  return new Date(t.due_date) < today;
+}
+
+function formatDate(d) {
+  if (!d) return '';
+  const dt = new Date(d);
+  return (dt.getMonth() + 1) + '月' + dt.getDate() + '日';
+}
+
+async function loadTodos() {
+  const params = new URLSearchParams();
+  if (currentCat) params.set('category_id', currentCat);
+  const r = await apiFetch('/api/todos?' + params, {silent: true});
+  if (!r.ok) { showToast('加载失败', 'error'); return; }
+  allTodos = r.data;
+  renderTodos();
+  updateHeaderStats();
+}
+
+// 顶部统计：复用已加载的 allTodos，避免每次渲染都重复请求 /api/todos。
+// 注意：分类筛选时 allTodos 是该分类的子集，统计会反映当前筛选范围（单用户场景可接受）。
+function updateHeaderStats() {
+  try {
+    const pending = allTodos.filter(t => t.status === 'pending').length;
+    const high = allTodos.filter(t => t.priority === 'high' && t.status === 'pending').length;
+    const today = new Date(); today.setHours(0,0,0,0);
+    const overdue = allTodos.filter(t => t.status === 'pending' && t.due_date && new Date(t.due_date) < today).length;
+    let s = pending + ' 个待办';
+    if (high > 0) s += ' · ' + high + ' 个高优先级';
+    if (overdue > 0) s += ' · <span class="text-red-600 font-medium">' + overdue + ' 个逾期</span>';
+    document.getElementById('header-stats').innerHTML = s;
+  } catch (e) {}
+}
+
+function renderTodoCard(t) {
+  const prio = PRIORITY_LABEL[t.priority] || '中';
+  const dueText = t.due_date ? formatDate(t.due_date) : '';
+  const overdue = isOverdue(t);
+  const checkedCls = t.status === 'done' ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-slate-300';
+  // 日期区间徽章：有 start_date 且 ≠ due_date 时显示区间，并在进行中标注进度
+  const startText = t.start_date ? formatDate(t.start_date) : '';
+  const inRange = t.start_date && t.due_date && t.start_date !== t.due_date
+    && (function() {
+      const today = new Date(); today.setHours(0,0,0,0);
+      const s = new Date(t.start_date), e = new Date(t.due_date);
+      s.setHours(0,0,0,0); e.setHours(0,0,0,0);
+      return today >= s && today <= e;
+    })();
+  const spanLabel = inRange
+    ? (() => {
+        const s = new Date(t.start_date), e = new Date(t.due_date), today = new Date();
+        s.setHours(0,0,0,0); e.setHours(0,0,0,0); today.setHours(0,0,0,0);
+        const total = Math.round((e - s) / 86400000) + 1;       // 总天数
+        const dayN = Math.round((today - s) / 86400000) + 1;     // 第几天
+        return `${startText}→${dueText} · 第${dayN}/${total}天`;
+      })()
+    : (startText && startText !== dueText ? `${startText}→${dueText}` : dueText);
+  return `
+  <div class="todo-card bg-white rounded-xl border border-slate-200 p-3 cursor-pointer anim-fade-in ${t.status === 'done' ? 'completed-row' : ''}" data-id="${t.id}" onclick="openDetail(${t.id})">
+    <div class="flex items-start gap-2">
+      <button onclick="event.stopPropagation(); toggleTodo(${t.id}, '${t.status}')"
+              class="check-btn mt-0.5 w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${checkedCls}">
+        ${t.status === 'done' ? '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>' : ''}
+      </button>
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-1.5 mb-1 flex-wrap">
+          <span class="priority-pill priority-${t.priority}">${prio}</span>
+          ${t.category_name ? `<span class="cat-pill" style="background-color: ${t.category_color}1a; color: ${t.category_color}"><span class="dot" style="background-color: ${t.category_color}"></span>${escapeHtml(t.category_name)}</span>` : ''}
+          ${t.recurrence_type ? `<span class="inline-flex items-center gap-0.5 text-xs font-medium text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded-full"><svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>${RECURRENCE_LABEL[t.recurrence_type] || ''}</span>` : ''}
+          ${(t.subtask_total || 0) > 0 ? `<span class="inline-flex items-center gap-0.5 text-xs font-medium ${t.subtask_done >= t.subtask_total ? 'text-emerald-600 bg-emerald-50' : 'text-slate-500 bg-slate-100'} px-1.5 py-0.5 rounded-full"><svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/></svg>${t.subtask_done}/${t.subtask_total}</span>` : ''}
+          ${dueText ? `<span class="text-xs ${inRange ? 'text-brand-600 bg-brand-50 px-1.5 py-0.5 rounded-full font-medium' : (overdue ? 'overdue' : 'text-slate-400')} flex items-center gap-0.5"><svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>${spanLabel}</span>` : ''}
+        </div>
+        <div class="todo-title text-sm font-semibold text-slate-800 break-words">${escapeHtml(t.title)}</div>
+        ${t.description ? `<div class="text-xs text-slate-400 mt-0.5 line-clamp-1 break-words">${escapeHtml(t.description)}</div>` : ''}
+      </div>
+      <button onclick="event.stopPropagation(); deleteTodo(${t.id})"
+              class="w-7 h-7 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 flex items-center justify-center flex-shrink-0 transition-all"
+              title="删除">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a2 2 0 012-2h2a2 2 0 012 2v3"/></svg>
+      </button>
+    </div>
+  </div>`;
+}
+
+function classifyTodos(todos) {
+  const today = new Date(); today.setHours(0,0,0,0);
+  const weekEnd = new Date(today); weekEnd.setDate(weekEnd.getDate() + 7);
+  const overdue = [], todayList = [], weekDays = [], noDate = [], done = [];
+  // 初始化 1-7 天的空分组
+  for (let i = 1; i <= 7; i++) {
+    const d = new Date(today); d.setDate(d.getDate() + i);
+    weekDays.push({
+      date: localDateStr(d),  // 本地日期
+      label: dayLabel(d, i),
+      todos: [],
+    });
+  }
+  for (const t of todos) {
+    if (t.status === 'done') { done.push(t); continue; }
+    if (!t.due_date) { noDate.push(t); continue; }
+    const d = new Date(t.due_date); d.setHours(0,0,0,0);
+    // 跨期任务：今天在 [start_date, due_date] 区间内 → 进"今日"栏
+    const inRangeToday = t.start_date && (() => {
+      const s = new Date(t.start_date); s.setHours(0,0,0,0);
+      return today >= s && today <= d;
+    })();
+    if (d < today && !inRangeToday) { overdue.push(t); }
+    else if (d.getTime() === today.getTime() || inRangeToday) { todayList.push(t); }
+    else if (d <= weekEnd) {
+      const diffDays = Math.round((d - today) / (1000 * 60 * 60 * 24));
+      const idx = diffDays - 1;
+      if (idx >= 0 && idx < weekDays.length) weekDays[idx].todos.push(t);
+    }
+    else { noDate.push(t); }
+  }
+  done.sort((a, b) => (b.completed_at || '').localeCompare(a.completed_at || ''));
+  return {overdue, todayList, weekDays, noDate, done};
+}
+
+function dayLabel(d, diffDays) {
+  if (diffDays === 1) return '明天';
+  if (diffDays === 2) return '后天';
+  return (d.getMonth() + 1) + '月' + d.getDate() + '日';
+}
+
+function renderColumn(containerId, todos) {
+  const el = document.getElementById(containerId);
+  if (todos.length === 0) {
+    el.innerHTML = '<p class="text-xs text-slate-300 italic py-3 text-center">暂无</p>';
+  } else {
+    el.innerHTML = todos.map(renderTodoCard).join('');
+  }
+}
+
+function renderTodos() {
+  const empty = document.getElementById('empty-state');
+  const {overdue, todayList, weekDays, noDate, done} = classifyTodos(allTodos);
+  const hasAny = overdue.length || todayList.length || weekDays.some(d => d.todos.length) || noDate.length || done.length;
+
+  if (!hasAny) {
+    document.getElementById('todo-columns').classList.add('hidden');
+    document.getElementById('section-done').classList.add('hidden');
+    document.getElementById('section-no-date').classList.add('hidden');
+    empty.classList.remove('hidden');
+    return;
+  }
+  empty.classList.add('hidden');
+  document.getElementById('todo-columns').classList.remove('hidden');
+
+  renderColumn('col-overdue', overdue);
+  renderColumn('col-today', todayList);
+  renderWeekDays('col-week', weekDays);
+
+  document.getElementById('count-overdue').textContent = overdue.length || '';
+  document.getElementById('count-today').textContent = todayList.length || '';
+  const weekTotal = weekDays.reduce((s, d) => s + d.todos.length, 0);
+  document.getElementById('count-week').textContent = weekTotal || '';
+
+  const noDateSection = document.getElementById('section-no-date');
+  if (noDate.length > 0) {
+    noDateSection.classList.remove('hidden');
+    document.getElementById('count-no-date').textContent = noDate.length;
+    renderColumn('col-no-date', noDate);
+  } else {
+    noDateSection.classList.add('hidden');
+  }
+
+  const doneSection = document.getElementById('section-done');
+  if (done.length > 0) {
+    doneSection.classList.remove('hidden');
+    document.getElementById('count-done').textContent = done.length;
+    renderColumn('col-done', done);
+  } else {
+    doneSection.classList.add('hidden');
+  }
+}
+
+function renderWeekDays(containerId, days) {
+  const el = document.getElementById(containerId);
+  const hasAny = days.some(d => d.todos.length > 0);
+  if (!hasAny) {
+    el.innerHTML = '<p class="text-xs text-slate-300 italic py-3 text-center">暂无</p>';
+    return;
+  }
+  el.innerHTML = days.map(day => {
+    const count = day.todos.length;
+    if (count === 0) return '';
+    return `
+    <div class="mb-3 last:mb-0">
+      <div class="flex items-center gap-1.5 mb-1.5 px-1">
+        <span class="text-xs font-semibold text-slate-500">${day.label}</span>
+        <span class="text-[10px] font-medium text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-full">${count}个</span>
+      </div>
+      <div class="space-y-1.5">
+        ${day.todos.map(renderTodoCard).join('')}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function toggleTodo(id, status) {
+  const endpoint = status === 'done' ? 'reopen' : 'complete';
+  const r = await apiFetch('/api/todos/' + id + '/' + endpoint, {method: 'POST'});
+  if (!r.ok) return;
+  if (status === 'done') {
+    showToast('已重新打开', 'success');
+    playUndoSound();
+  } else {
+    const data = r.data;
+    if (data.next_todo_id) {
+      showToast('已完成，已生成下次待办', 'success');
+      playCompleteSound();
+    } else {
+      showToast('已完成', 'success', {
+        label: '撤销',
+        onClick: async () => {
+          const rr = await apiFetch('/api/todos/' + id + '/reopen', {method: 'POST'});
+          if (rr.ok) {
+            showToast('已撤销', 'success');
+            playUndoSound();
+            loadTodos();
+          }
+        }
+      });
+      playCompleteSound();
+    }
+  }
+  loadTodos();
+}
+
+async function deleteTodo(id) {
+  if (!confirm('确定要删除这条待办吗？')) return;
+  const r = await apiFetch('/api/todos/' + id, {method: 'DELETE'});
+  if (r.ok) { showToast('已删除', 'success'); loadTodos(); }
+}
+
+// 分类筛选下拉
+const catToggle = document.getElementById('cat-filter-toggle');
+const catList = document.getElementById('cat-filter-list');
+const catIcon = document.getElementById('cat-filter-icon');
+const catLabel = document.getElementById('cat-filter-label');
+
+catToggle.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (catList.classList.contains('hidden')) {
+    catList.classList.remove('hidden');
+    catIcon.style.transform = 'rotate(180deg)';
+  } else {
+    catList.classList.add('hidden');
+    catIcon.style.transform = '';
+  }
+});
+
+document.addEventListener('click', (e) => {
+  if (!catList.contains(e.target) && !catToggle.contains(e.target)) {
+    catList.classList.add('hidden');
+    catIcon.style.transform = '';
+  }
+});
+
+function updateCatTrigger() {
+  const active = document.querySelector('#cat-filter-list .cat-chip.bg-slate-900');
+  if (active) {
+    const dot = active.querySelector('.inline-block');
+    const color = dot ? dot.style.backgroundColor : '';
+    const name = active.textContent.trim();
+    catLabel.innerHTML = (color ? `<span class="inline-block w-1.5 h-1.5 rounded-full mr-1.5 align-middle" style="background-color:${color}"></span>` : '') + name;
+  } else {
+    catLabel.textContent = '全部分类';
+  }
+}
+
+document.querySelectorAll('#cat-filter-list .cat-chip').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#cat-filter-list .cat-chip').forEach(b => {
+      b.className = 'cat-chip btn-min px-3 py-1.5 rounded-full text-xs font-medium bg-white text-slate-600 border border-slate-200 whitespace-nowrap hover:bg-slate-50';
+      const dot = b.querySelector('.inline-block');
+      if (dot) b.insertBefore(dot, b.firstChild);
+    });
+    btn.className = 'cat-chip btn-min px-3 py-1.5 rounded-full text-xs font-medium bg-slate-900 text-white whitespace-nowrap';
+    currentCat = btn.dataset.cat || '';
+    updateCatTrigger();
+    catList.classList.add('hidden');
+    catIcon.style.transform = '';
+    loadTodos();
+  });
+});
+
+document.getElementById('quick-add').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const titleInput = document.getElementById('add-title');
+  const title = titleInput.value.trim();
+  if (!title) return;
+  const body = {
+    title,
+    priority: addPriority,
+  };
+  const catVal = document.getElementById('add-category').value;
+  if (catVal) body.category_id = parseInt(catVal);
+  const startVal = document.getElementById('add-start').value;
+  if (startVal) body.start_date = startVal;
+  const dueVal = document.getElementById('add-due').value;
+  if (dueVal) body.due_date = dueVal;
+  const descVal = document.getElementById('add-description').value.trim();
+  if (descVal) body.description = descVal;
+  const recVal = document.getElementById('add-recurrence').value;
+  if (recVal) {
+    body.recurrence_type = recVal;
+    if (recVal === 'custom') {
+      body.recurrence_interval = parseInt(document.getElementById('add-recurrence-interval').value) || 1;
+    }
+    body.recurrence_copy_subtasks = document.getElementById('add-copy-subtasks').checked;
+  }
+
+  const resp = await apiFetch('/api/todos', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(body),
+  });
+  if (resp.ok) {
+    titleInput.value = '';
+    document.getElementById('add-start').value = '';  // 开始日期默认空（不限开始日）
+    document.getElementById('add-due').value = localDateStr();  // 重置回今天，保持与初始化一致
+    document.getElementById('add-description').value = '';
+    document.getElementById('add-category').value = '';
+    document.getElementById('add-recurrence').value = '';
+    document.getElementById('add-recurrence-interval').value = '';
+    document.getElementById('add-recurrence-interval').classList.add('hidden');
+    document.getElementById('add-copy-subtasks-label').style.display = 'none';
+    document.getElementById('add-copy-subtasks').checked = false;
+    // 重置优先级为中
+    addPriority = 'medium';
+    document.querySelectorAll('#add-priority button').forEach(b => {
+      b.className = 'px-3 py-1.5 rounded-full text-slate-500 transition-colors';
+    });
+    document.querySelector('#add-priority button[data-p="medium"]').className = 'px-3 py-1.5 rounded-full bg-white text-brand-700 shadow-sm transition-colors';
+    // 收起展开区
+    document.getElementById('add-expanded').classList.add('hidden');
+    document.getElementById('expand-icon').style.transform = '';
+    showToast('已添加', 'success');
+    loadTodos();
+  }
+});
+
+// openDetail / showPanel / loadSubtasks / saveDetail / 子任务操作 / 面板事件绑定
+// 已集中到 base.html，所有页面共享，这里不再重复定义。
+
+async function loadCategories() {
+  const r = await apiFetch('/api/categories', {silent: true});
+  if (r.ok) allCategories = r.data;
+}
+
+(async () => {
+  await loadCategories();
+  await loadTodos();
+})();
+</script>
+{% endblock %}

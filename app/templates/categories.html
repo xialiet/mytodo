@@ -1,0 +1,223 @@
+{% extends "base.html" %}
+
+{% block title %}MyTodo - 分类{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto px-4 py-6 md:py-8">
+
+  <div class="flex items-end justify-between mb-4">
+    <div>
+      <h1 class="text-3xl font-bold tracking-tight text-slate-900 flex items-center gap-2.5">
+        <svg class="w-9 h-9 flex-shrink-0 text-brand-500 cursor-pointer" onclick="openSettings()" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+        分类
+      </h1>
+      <p class="text-sm text-slate-500 mt-1">按分类浏览待办 · 点击左侧图标管理分类</p>
+    </div>
+  </div>
+
+  <!-- 筛选栏 -->
+  <div class="flex items-center gap-2 mb-5">
+    <span class="text-xs font-semibold text-slate-400 mr-1">筛选</span>
+    <button onclick="setCatFilter('all')" id="cf-all" class="cat-filter-btn btn-min px-3 py-1.5 rounded-full text-xs font-semibold bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 transition-colors">全部</button>
+    <button onclick="setCatFilter('pending')" id="cf-pending" class="cat-filter-btn btn-min px-3 py-1.5 rounded-full text-xs font-semibold bg-slate-900 text-white transition-colors">待办</button>
+    <button onclick="setCatFilter('done')" id="cf-done" class="cat-filter-btn btn-min px-3 py-1.5 rounded-full text-xs font-semibold bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 transition-colors">已完成</button>
+  </div>
+
+  <div id="cat-sections" class="space-y-5"></div>
+
+  <div id="cat-empty" class="hidden text-center py-16">
+    <svg class="mx-auto w-28 h-28" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+      <rect x="25" y="20" width="70" height="80" rx="8" fill="#f1f5f9"/>
+      <rect x="32" y="40" width="56" height="5" rx="2.5" fill="#cbd5e1"/>
+      <rect x="32" y="55" width="40" height="5" rx="2.5" fill="#e2e8f0"/>
+      <rect x="32" y="70" width="48" height="5" rx="2.5" fill="#e2e8f0"/>
+      <circle cx="85" cy="89" r="14" fill="white" stroke="#cbd5e1" stroke-width="2"/>
+      <path d="M79 89l4 4 8-8" fill="none" stroke="#6366f1" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <p class="mt-4 text-sm font-medium text-slate-600">还没有分类</p>
+    <p class="mt-1 text-xs text-slate-400">点击左上角图标，在设置中添加分类</p>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const PRIORITY_LABEL = {high: '高', medium: '中', low: '低'};
+const RECURRENCE_LABEL = {daily:'每天', weekly:'每周', biweekly:'双周', monthly:'每月', custom:'自定义'};
+let catFilter = 'pending';
+
+function formatDate(d) {
+  if (!d) return '';
+  const dt = new Date(d);
+  return (dt.getMonth() + 1) + '月' + dt.getDate() + '日';
+}
+
+function isOverdue(t) {
+  if (t.status === 'done' || !t.due_date) return false;
+  const today = new Date(); today.setHours(0,0,0,0);
+  return new Date(t.due_date) < today;
+}
+
+function renderTodoCard(t) {
+  const prio = PRIORITY_LABEL[t.priority] || '中';
+  const dueText = t.due_date ? formatDate(t.due_date) : '';
+  const overdue = isOverdue(t);
+  const checkedCls = t.status === 'done' ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-slate-300';
+  // 日期区间徽章
+  const startText = t.start_date ? formatDate(t.start_date) : '';
+  const inRange = t.start_date && t.due_date && t.start_date !== t.due_date
+    && (function() {
+      const today = new Date(); today.setHours(0,0,0,0);
+      const s = new Date(t.start_date), e = new Date(t.due_date);
+      s.setHours(0,0,0,0); e.setHours(0,0,0,0);
+      return today >= s && today <= e;
+    })();
+  const spanLabel = inRange
+    ? (() => {
+        const s = new Date(t.start_date), e = new Date(t.due_date), today = new Date();
+        s.setHours(0,0,0,0); e.setHours(0,0,0,0); today.setHours(0,0,0,0);
+        const total = Math.round((e - s) / 86400000) + 1;
+        const dayN = Math.round((today - s) / 86400000) + 1;
+        return `${startText}→${dueText} · 第${dayN}/${total}天`;
+      })()
+    : (startText && startText !== dueText ? `${startText}→${dueText}` : dueText);
+  return `
+  <div class="todo-card bg-white rounded-xl border border-slate-200 p-3 cursor-pointer anim-fade-in ${t.status === 'done' ? 'completed-row' : ''}" data-id="${t.id}" onclick="openDetail(${t.id})">
+    <div class="flex items-start gap-2">
+      <button onclick="event.stopPropagation(); toggleTodo(${t.id}, '${t.status}')"
+              class="check-btn mt-0.5 w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${checkedCls}">
+        ${t.status === 'done' ? '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>' : ''}
+      </button>
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-1.5 mb-1 flex-wrap">
+          <span class="priority-pill priority-${t.priority}">${prio}</span>
+          ${t.category_name ? `<span class="cat-pill" style="background-color: ${t.category_color}1a; color: ${t.category_color}"><span class="dot" style="background-color: ${t.category_color}"></span>${escapeHtml(t.category_name)}</span>` : ''}
+          ${t.recurrence_type ? `<span class="inline-flex items-center gap-0.5 text-xs font-medium text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded-full"><svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>${RECURRENCE_LABEL[t.recurrence_type] || ''}</span>` : ''}
+          ${(t.subtask_total || 0) > 0 ? `<span class="inline-flex items-center gap-0.5 text-xs font-medium ${t.subtask_done >= t.subtask_total ? 'text-emerald-600 bg-emerald-50' : 'text-slate-500 bg-slate-100'} px-1.5 py-0.5 rounded-full"><svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/></svg>${t.subtask_done}/${t.subtask_total}</span>` : ''}
+          ${dueText ? `<span class="text-xs ${inRange ? 'text-brand-600 bg-brand-50 px-1.5 py-0.5 rounded-full font-medium' : (overdue ? 'overdue' : 'text-slate-400')} flex items-center gap-0.5"><svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>${spanLabel}</span>` : ''}
+        </div>
+        <div class="todo-title text-sm font-semibold text-slate-800 break-words">${escapeHtml(t.title)}</div>
+        ${t.description ? `<div class="text-xs text-slate-400 mt-0.5 line-clamp-1 break-words">${escapeHtml(t.description)}</div>` : ''}
+      </div>
+      <button onclick="event.stopPropagation(); deleteTodo(${t.id})"
+              class="w-7 h-7 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 flex items-center justify-center flex-shrink-0 transition-all"
+              title="删除">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a2 2 0 012-2h2a2 2 0 012 2v3"/></svg>
+      </button>
+    </div>
+  </div>`;
+}
+
+function setCatFilter(f) {
+  catFilter = f;
+  document.querySelectorAll('.cat-filter-btn').forEach(btn => {
+    btn.className = 'cat-filter-btn btn-min px-3 py-1.5 rounded-full text-xs font-semibold bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 transition-colors';
+  });
+  const active = document.getElementById('cf-' + f);
+  active.className = 'cat-filter-btn btn-min px-3 py-1.5 rounded-full text-xs font-semibold bg-slate-900 text-white transition-colors';
+  renderCatSections();
+}
+
+async function loadTodos() {
+  const r = await apiFetch('/api/todos', {silent: true});
+  if (!r.ok) { showToast('加载失败', 'error'); return; }
+  allTodos = r.data;
+  renderCatSections();
+}
+
+function renderCatSections() {
+  const container = document.getElementById('cat-sections');
+  const empty = document.getElementById('cat-empty');
+
+  const groups = {};
+  for (const t of allTodos) {
+    if (catFilter === 'pending' && t.status === 'done') continue;
+    if (catFilter === 'done' && t.status !== 'done') continue;
+    const key = t.category_id || '__none__';
+    const name = t.category_name || '无分类';
+    const color = t.category_color || '#6b7280';
+    if (!groups[key]) groups[key] = { name, color, todos: [] };
+    groups[key].todos.push(t);
+  }
+
+  const entries = Object.entries(groups);
+  if (entries.length === 0) {
+    container.innerHTML = '';
+    empty.classList.remove('hidden');
+    return;
+  }
+  empty.classList.add('hidden');
+
+  entries.sort((a, b) => {
+    const aPending = a[1].todos.filter(t => t.status === 'pending').length;
+    const bPending = b[1].todos.filter(t => t.status === 'pending').length;
+    return bPending - aPending;
+  });
+
+  container.innerHTML = entries.map(([key, group]) => {
+    const pending = group.todos.filter(t => t.status === 'pending').length;
+    const done = group.todos.filter(t => t.status === 'done').length;
+    const total = group.todos.length;
+    return `
+    <div class="anim-fade-in bg-white/40 rounded-2xl border border-slate-200 overflow-hidden">
+      <button onclick="toggleCatSection(this)" class="w-full flex items-center gap-2 px-4 py-3 hover:bg-slate-50/80 transition-colors text-left">
+        <svg class="w-4 h-4 text-slate-400 transition-transform cat-chevron" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+        <span class="w-3 h-3 rounded-full flex-shrink-0 ring-2 ring-white shadow-sm" style="background-color: ${group.color}"></span>
+        <h2 class="text-sm font-bold text-slate-700">${escapeHtml(group.name)}</h2>
+        <span class="text-xs text-slate-400">${pending > 0 ? pending + ' 个待办' : ''}${pending > 0 && done > 0 ? ' · ' : ''}${done > 0 ? done + ' 个已完成' : ''}</span>
+        <span class="text-[10px] font-medium text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-full ml-auto">${total}个</span>
+      </button>
+      <div class="cat-section-body hidden px-4 pb-4 space-y-1.5">
+        ${group.todos.map(renderTodoCard).join('')}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleCatSection(btn) {
+  const body = btn.nextElementSibling;
+  const chevron = btn.querySelector('.cat-chevron');
+  if (body.classList.contains('hidden')) {
+    body.classList.remove('hidden');
+    chevron.style.transform = 'rotate(90deg)';
+  } else {
+    body.classList.add('hidden');
+    chevron.style.transform = '';
+  }
+}
+
+async function toggleTodo(id, status) {
+  const endpoint = status === 'done' ? 'reopen' : 'complete';
+  const r = await apiFetch('/api/todos/' + id + '/' + endpoint, {method: 'POST'});
+  if (!r.ok) return;
+  if (status === 'done') {
+    showToast('已重新打开', 'success');
+    playUndoSound();
+  } else {
+    const data = r.data;
+    showToast(data.next_todo_id ? '已完成，已生成下次待办' : '已完成', 'success');
+    playCompleteSound();
+  }
+  loadTodos();
+}
+
+async function deleteTodo(id) {
+  if (!confirm('确定要删除这条待办吗？')) return;
+  const r = await apiFetch('/api/todos/' + id, {method: 'DELETE'});
+  if (r.ok) { showToast('已删除', 'success'); loadTodos(); }
+}
+
+// openDetail / showPanel / loadSubtasks / 子任务操作 / 面板事件绑定
+// 已集中到 base.html，所有页面共享，这里不再重复定义。
+
+let allTodos = [];
+
+async function loadCategories() {
+  // 不再需要本地 allCategories；详情面板的分类下拉由 base.html 自行加载。
+}
+
+(async () => {
+  await loadTodos();
+})();
+</script>
+{% endblock %}

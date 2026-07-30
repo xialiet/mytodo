@@ -1,0 +1,1196 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+  <title>{% block title %}MyTodo{% endblock %}</title>
+  <!-- PWA：manifest + iOS 全屏 + 主题色 -->
+  <link rel="manifest" href="/static/manifest.json">
+  <meta name="theme-color" content="#4f46e5">
+  <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="MyTodo">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <!-- MiSans 字体不在此引入：由 loadThemeFonts() 在切到质感版时按需注入（512KB CSS，默认/深色用户零开销） -->
+  <script src="/static/tailwind.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['var(--font-sans)'],
+          },
+          colors: {
+            brand: {
+              50: 'var(--c-brand-50)', 100: 'var(--c-brand-100)', 200: 'var(--c-brand-200)',
+              300: 'var(--c-brand-300)', 400: 'var(--c-brand-400)', 500: 'var(--c-brand-500)',
+              600: 'var(--c-brand-600)', 700: 'var(--c-brand-700)',
+            },
+          },
+        },
+      },
+    }
+  </script>
+  <style>
+    /* 切主题瞬间禁用全页过渡：避免数百个 transition-colors 同时动画 + 毛玻璃逐帧重绘的卡顿 */
+    .no-transitions, .no-transitions *, .no-transitions *::before, .no-transitions *::after { transition: none !important; }
+
+    /* ========== 主题系统：三套主题的 CSS 变量 ==========
+       通过 html[data-theme] 切换。HTML class（bg-brand-600 等）一行不改，
+       只改变量值。切换器在设置面板，选择存 localStorage。
+    */
+
+    /* --- theme-default（现状：浅亮 + Inter + 紧凑）--- */
+    :root, html[data-theme="default"] {
+      color-scheme: light;
+      --font-sans: 'Inter', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      --c-brand-50: #eef2ff; --c-brand-100: #e0e7ff; --c-brand-200: #c7d2fe;
+      --c-brand-300: #a5b4fc; --c-brand-400: #818cf8; --c-brand-500: #6366f1;
+      --c-brand-600: #4f46e5; --c-brand-700: #4338ca;
+      --card-radius: 0.75rem;
+      --card-shadow: 0 1px 3px rgba(15,23,42,0.04);
+    }
+
+    /* --- theme-light-premium（浅色质感版：更柔和背景 + 更大圆角 + 精细阴影）--- */
+    html[data-theme="light-premium"] {
+      color-scheme: light;
+      --font-sans: 'MiSans', 'Inter', 'Noto Sans SC', -apple-system, system-ui, sans-serif;
+      --c-brand-50: #f0f1fe; --c-brand-100: #e2e4fc; --c-brand-200: #c9ccf8;
+      --c-brand-300: #a8adf3; --c-brand-400: #888ced; --c-brand-500: #6d6fe5;
+      --c-brand-600: #5252db; --c-brand-700: #4242c0;
+      --card-radius: 1rem;
+      --card-shadow: 0 2px 8px -2px rgba(15,23,42,0.06), 0 1px 3px -1px rgba(15,23,42,0.03);
+    }
+
+    /* --- theme-dark（深色模式：护眼）--- */
+    html[data-theme="dark"] {
+      color-scheme: dark;
+      --font-sans: 'Inter', 'Noto Sans SC', -apple-system, system-ui, sans-serif;
+      --c-brand-50: #1e1b3a; --c-brand-100: #252147; --c-brand-200: #312c5e;
+      --c-brand-300: #423a82; --c-brand-400: #5a50b8; --c-brand-500: #6366f1;
+      --c-brand-600: #818cf8; --c-brand-700: #a5b4fc;
+      --card-radius: 0.75rem;
+      --card-shadow: 0 2px 8px -2px rgba(0,0,0,0.3);
+    }
+
+    /* 深色模式：覆盖 Tailwind slate 系（页面底色/卡片底色/文字色）*/
+    html[data-theme="dark"] {
+      --tw-bg-slate-50: #0a0a0b;   /* 页面底 */
+      --tw-bg-slate-100: #18181b;  /* 卡片底/输入框底 */
+      --tw-bg-slate-200: #27272a;
+      --tw-bg-slate-300: #3f3f46;
+      --tw-text-slate-200: #a1a1aa;
+      --tw-text-slate-300: #71717a;
+      --tw-text-slate-400: #71717a;
+      --tw-text-slate-500: #a1a1aa;
+      --tw-text-slate-600: #c4c4cc;
+      --tw-text-slate-700: #d4d4d8;
+      --tw-text-slate-800: #e4e4e7;
+      --tw-text-slate-900: #f4f4f5;
+    }
+
+    html, body { font-family: var(--font-sans); -webkit-font-smoothing: antialiased; }
+    body { padding-bottom: calc(5rem + env(safe-area-inset-bottom)); -webkit-tap-highlight-color: transparent; }
+
+    /* ========== 深色模式：覆盖 Tailwind 原子类 ==========
+       Tailwind 的 slate/emerald/red 是硬编码色值，无法用变量切换。
+       这里用 [data-theme="dark"] 选择器直接覆盖生成的 class。
+       只覆盖背景、文字、边框三大类，保持布局不变。
+    */
+    html[data-theme="dark"] .bg-slate-50 { background-color: #0a0a0b !important; }
+    html[data-theme="dark"] .bg-slate-100 { background-color: #18181b !important; }
+    html[data-theme="dark"] .bg-slate-200 { background-color: #27272a !important; }
+    html[data-theme="dark"] .bg-slate-300 { background-color: #3f3f46 !important; }
+    html[data-theme="dark"] .bg-white { background-color: #18181b !important; }
+    html[data-theme="dark"] .bg-white\/60 { background-color: rgba(24,24,27,0.6) !important; }
+    html[data-theme="dark"] .bg-white\/40 { background-color: rgba(24,24,27,0.4) !important; }
+    html[data-theme="dark"] .bg-white\/90 { background-color: rgba(24,24,27,0.9) !important; }
+    html[data-theme="dark"] .bg-white\/80 { background-color: rgba(24,24,27,0.8) !important; }
+    html[data-theme="dark"] .bg-slate-50\/80 { background-color: rgba(10,10,11,0.8) !important; }
+    html[data-theme="dark"] .bg-slate-50\/40 { background-color: rgba(10,10,11,0.4) !important; }
+
+    html[data-theme="dark"] .text-slate-200 { color: #a1a1aa !important; }
+    html[data-theme="dark"] .text-slate-300 { color: #8b8b94 !important; }
+    html[data-theme="dark"] .text-slate-400 { color: #8b8b94 !important; }
+    html[data-theme="dark"] .text-slate-500 { color: #a1a1aa !important; }
+    html[data-theme="dark"] .text-slate-600 { color: #c4c4cc !important; }
+    html[data-theme="dark"] .text-slate-700 { color: #d4d4d8 !important; }
+    html[data-theme="dark"] .text-slate-800 { color: #e4e4e7 !important; }
+    html[data-theme="dark"] .text-slate-900 { color: #f4f4f5 !important; }
+
+    html[data-theme="dark"] .border-slate-100 { border-color: #27272a !important; }
+    html[data-theme="dark"] .border-slate-200 { border-color: #3f3f46 !important; }
+    html[data-theme="dark"] .border-slate-300 { border-color: #52525b !important; }
+    html[data-theme="dark"] .border-slate-400 { border-color: #71717a !important; }
+
+    html[data-theme="dark"] .divide-slate-100 > * + * { border-color: #27272a !important; }
+
+    /* 深色下按钮/强调色微调：emerald/red 保持识别度 */
+    html[data-theme="dark"] .bg-red-50 { background-color: rgba(220,38,38,0.15) !important; }
+    html[data-theme="dark"] .bg-emerald-50 { background-color: rgba(16,185,129,0.15) !important; }
+    html[data-theme="dark"] .bg-amber-50 { background-color: rgba(245,158,11,0.15) !important; }
+    html[data-theme="dark"] .bg-indigo-50 { background-color: rgba(99,102,241,0.15) !important; }
+    html[data-theme="dark"] .text-red-600 { color: #f87171 !important; }
+    html[data-theme="dark"] .text-emerald-600 { color: #34d399 !important; }
+    html[data-theme="dark"] .text-emerald-500 { color: #34d399 !important; }
+    html[data-theme="dark"] .text-amber-600 { color: #fbbf24 !important; }
+
+    /* 深色下面板/遮罩 */
+    html[data-theme="dark"] .backdrop-blur-lg { backdrop-filter: blur(12px); }
+    html[data-theme="dark"] .placeholder-slate-300::placeholder { color: #52525b !important; }
+    html[data-theme="dark"] .placeholder-slate-400::placeholder { color: #52525b !important; }
+
+    /* ========== 浅色质感版：全面质感增强 ==========
+       与默认版的差异：MiSans 字体 + 柔和蓝灰底色 + 多层细腻阴影 + 更大圆角 + 收紧标题字距 */
+    html[data-theme="light-premium"] body { letter-spacing: 0.012em; }
+
+    /* 圆角系统：整体更圆润 */
+    html[data-theme="light-premium"] .rounded-xl { border-radius: var(--card-radius); }
+    html[data-theme="light-premium"] .rounded-2xl { border-radius: 1.25rem; }
+    html[data-theme="light-premium"] .rounded-lg { border-radius: 0.625rem; }
+
+    /* 页面底色：柔和蓝灰，衬托白色卡片浮起 */
+    html[data-theme="light-premium"] .bg-slate-50 { background-color: #f3f4f9 !important; }
+    html[data-theme="light-premium"] .bg-slate-100 { background-color: #ebedf5 !important; }
+    html[data-theme="light-premium"] .bg-slate-50\/80 { background-color: rgba(243,244,249,0.8) !important; }
+    html[data-theme="light-premium"] .bg-slate-50\/40 { background-color: rgba(243,244,249,0.4) !important; }
+
+    /* 边框：更浅更柔，靠阴影分层而不是靠描边 */
+    html[data-theme="light-premium"] .border-slate-200 { border-color: #e7e9f3 !important; }
+    html[data-theme="light-premium"] .border-slate-100 { border-color: #eef0f7 !important; }
+
+    /* 阴影系统：多层柔和投影（靛蓝基调，比纯黑灰更通透） */
+    html[data-theme="light-premium"] .shadow-sm { box-shadow: 0 1px 2px rgba(43,46,89,0.05), 0 2px 6px -1px rgba(43,46,89,0.04) !important; }
+    html[data-theme="light-premium"] .shadow { box-shadow: 0 2px 4px -1px rgba(43,46,89,0.05), 0 6px 16px -4px rgba(43,46,89,0.07) !important; }
+    html[data-theme="light-premium"] .shadow-md { box-shadow: 0 3px 6px -2px rgba(43,46,89,0.06), 0 10px 24px -6px rgba(43,46,89,0.08) !important; }
+    html[data-theme="light-premium"] .shadow-lg { box-shadow: 0 6px 12px -3px rgba(43,46,89,0.07), 0 16px 36px -8px rgba(43,46,89,0.10) !important; }
+    html[data-theme="light-premium"] .shadow-xl { box-shadow: 0 10px 20px -5px rgba(43,46,89,0.08), 0 24px 48px -10px rgba(43,46,89,0.12) !important; }
+
+    /* 卡片：默认带一层极轻投影，悬浮时上浮更明显 */
+    html[data-theme="light-premium"] .todo-card { box-shadow: 0 1px 2px rgba(43,46,89,0.04), 0 3px 10px -2px rgba(43,46,89,0.05); }
+    html[data-theme="light-premium"] .todo-card:hover { box-shadow: 0 4px 8px -2px rgba(43,46,89,0.07), 0 14px 32px -8px rgba(43,46,89,0.12); transform: translateY(-2px); }
+
+    /* 标题：收紧字距，更有排版感 */
+    html[data-theme="light-premium"] .text-2xl, html[data-theme="light-premium"] .text-xl { letter-spacing: -0.012em; }
+
+    /* 主按钮：轻投影 + 按压反馈 */
+    html[data-theme="light-premium"] .bg-brand-600 { box-shadow: 0 1px 2px rgba(82,82,219,0.25), 0 4px 12px -2px rgba(82,82,219,0.30); }
+  </style>
+  <!-- 防闪烁：在 body 渲染前从 localStorage 读取主题并设置 data-theme -->
+  <script>
+    // MiSans 按需加载：仅质感版需要，首次切入时注入 4 个字重 CSS（woff2 本身是 @font-face 惰性分片）
+    window.loadThemeFonts = function(t) {
+      if (t !== 'light-premium' || window._misansLoaded) return;
+      window._misansLoaded = true;
+      ['400', '500', '600', '700'].forEach(function(w) {
+        var l = document.createElement('link');
+        l.rel = 'stylesheet';
+        l.href = '/static/fonts/misans-' + w + '.css';
+        document.head.appendChild(l);
+      });
+    };
+    (function() {
+      var t = localStorage.getItem('mytodo-theme') || 'default';
+      document.documentElement.setAttribute('data-theme', t);
+      window.loadThemeFonts(t);
+    })();
+  </script>
+  <style>
+    .tab-bar { padding-bottom: env(safe-area-inset-bottom); }
+    .btn-min { min-height: 44px; min-width: 44px; }
+    .scroll-x::-webkit-scrollbar { display: none; }
+    .scroll-x { -ms-overflow-style: none; scrollbar-width: none; }
+
+    .overdue { color: #dc2626; font-weight: 600; }
+    .completed-row { opacity: 0.55; }
+    .completed-row .todo-title { text-decoration: line-through; text-decoration-color: #94a3b8; }
+
+    .priority-pill { display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.125rem 0.5rem; border-radius: 9999px; font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.01em; }
+    .priority-pill::before { content: ''; display: inline-block; width: 0.375rem; height: 0.375rem; border-radius: 9999px; }
+    .priority-high { background: #fef2f2; color: #b91c1c; box-shadow: inset 0 0 0 1px #fecaca; }
+    .priority-high::before { background: #dc2626; }
+    .priority-medium { background: #fffbeb; color: #b45309; box-shadow: inset 0 0 0 1px #fde68a; }
+    .priority-medium::before { background: #f59e0b; }
+    .priority-low { background: #f8fafc; color: #475569; box-shadow: inset 0 0 0 1px #e2e8f0; }
+    .priority-low::before { background: #94a3b8; }
+
+    .cat-pill { display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.125rem 0.5rem; border-radius: 9999px; font-size: 0.6875rem; font-weight: 500; }
+    .cat-pill .dot { width: 0.375rem; height: 0.375rem; border-radius: 9999px; }
+
+    .todo-card { transition: box-shadow 0.15s ease, transform 0.12s ease, border-color 0.15s ease; }
+    .todo-card:hover { box-shadow: 0 4px 12px -2px rgba(15, 23, 42, 0.08), 0 2px 6px -1px rgba(15, 23, 42, 0.04); transform: translateY(-1px); }
+    .todo-card:active { transform: translateY(0) scale(0.998); }
+
+    .check-btn { transition: all 0.15s ease; }
+    .check-btn:hover { border-color: #4f46e5; background: #eef2ff; }
+
+    .anim-fade-in { animation: fadeIn 0.2s ease-out; }
+    .anim-slide-up { animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1); }
+    .anim-pop { animation: pop 0.2s cubic-bezier(0.34, 1.56, 0.64, 1); }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes slideUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes pop { 0% { transform: scale(1); } 50% { transform: scale(1.08); } 100% { transform: scale(1); } }
+
+    .panel-backdrop { transition: opacity 0.25s ease; }
+    .panel-backdrop.open { opacity: 1; }
+
+    /* 更多菜单：从「更多」按钮上方展开的小气泡（独立样式，不复用 detail-panel） */
+    .more-sheet { transition: transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.18s ease; transform: translateY(12px) scale(0.85); opacity: 0; transform-origin: bottom right; }
+    .more-sheet.open { transform: translateY(0) scale(1); opacity: 1; }
+
+    /* 更多菜单条目：彩色图标块 + 行式布局 */
+    .more-item { display: flex; align-items: center; gap: 0.625rem; padding: 0.5rem 0.625rem; border-radius: 0.75rem; transition: background 0.15s ease; }
+    .more-item:active { background: rgba(99,102,241,0.08); }
+    .more-item-label { font-size: 0.8125rem; font-weight: 500; color: #334155; }
+    .more-ico { width: 2rem; height: 2rem; border-radius: 0.625rem; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .more-ico svg { width: 1.125rem; height: 1.125rem; }
+    .more-ico-indigo { background: #eef2ff; color: #4f46e5; }
+    .more-ico-amber { background: #fffbeb; color: #d97706; }
+    .more-ico-teal { background: #f0fdfa; color: #0d9488; }
+    .more-item-active { background: rgba(99,102,241,0.10); }
+    .more-item-active .more-item-label { color: #4f46e5; font-weight: 600; }
+
+    /* 气泡小尾巴：指向「更多」按钮，水平位置由 JS 精确对齐 */
+    .more-caret { position: absolute; bottom: -5px; right: 30px; width: 12px; height: 12px; background: #fff; transform: rotate(45deg); border-radius: 2.5px; }
+
+    /* 条目错落弹入 */
+    .more-sheet a.more-item { opacity: 0; transform: translateY(6px); transition: opacity 0.16s ease, transform 0.22s cubic-bezier(0.2,0.9,0.3,1.15), background 0.15s ease; }
+    .more-sheet.open a.more-item { opacity: 1; transform: none; }
+    .more-sheet.open a.more-item:nth-of-type(2) { transition-delay: 0.05s; }
+    .more-sheet.open a.more-item:nth-of-type(3) { transition-delay: 0.1s; }
+
+    /* 更多菜单：深色适配 */
+    html[data-theme="dark"] .more-item-label { color: #d4d4d8; }
+    html[data-theme="dark"] .more-item:active { background: rgba(129,140,248,0.14); }
+    html[data-theme="dark"] .more-item-active { background: rgba(129,140,248,0.18); }
+    html[data-theme="dark"] .more-item-active .more-item-label { color: #a5b4fc; }
+    html[data-theme="dark"] .more-caret { background: #18181b; }
+    html[data-theme="dark"] .more-ico-indigo { background: rgba(99,102,241,0.20); color: #a5b4fc; }
+    html[data-theme="dark"] .more-ico-amber { background: rgba(217,119,6,0.22); color: #fcd34d; }
+    html[data-theme="dark"] .more-ico-teal { background: rgba(13,148,136,0.22); color: #5eead4; }
+    .detail-panel { transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1); transform: translateY(100%); }
+    .detail-panel.open { transform: translateY(0); }
+    @media (min-width: 768px) {
+      .detail-panel { transform: translateX(100%); border-top-left-radius: 1rem; border-bottom-left-radius: 1rem; box-shadow: -20px 0 50px -10px rgba(15, 23, 42, 0.15); }
+      .detail-panel.open { transform: translateX(0); }
+    }
+
+    .settings-panel { transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1); transform: translateX(-100%); }
+    .settings-panel.open { transform: translateX(0); }
+
+    .toast { pointer-events: auto; display: flex; align-items: center; gap: 0.5rem; padding: 0.75rem 1rem; border-radius: 0.75rem; background: white; box-shadow: 0 10px 30px -8px rgba(15, 23, 42, 0.15), 0 4px 8px -2px rgba(15, 23, 42, 0.08); font-size: 0.875rem; color: #1e293b; min-width: 200px; max-width: 100%; animation: toastIn 0.25s cubic-bezier(0.16, 1, 0.3, 1); }
+    .toast.toast-out { animation: toastOut 0.2s ease-in forwards; }
+    .toast-success { border-left: 3px solid #10b981; }
+    .toast-error { border-left: 3px solid #ef4444; }
+    .toast-info { border-left: 3px solid #6366f1; }
+    @keyframes toastIn { from { transform: translateY(-12px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    @keyframes toastOut { to { transform: translateY(-12px); opacity: 0; } }
+
+    .subtask-enter { animation: subtaskIn 0.2s ease-out; }
+    @keyframes subtaskIn { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: translateX(0); } }
+
+    input:focus, textarea:focus, select:focus { outline: none; }
+    .ring-focus:focus { box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15); border-color: #6366f1; }
+
+    .pulse-dot { animation: pulse 2s ease-in-out infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+    /* 减弱动画偏好：所有 transition/animation 立即结束，符合 a11y 硬规则 */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+      }
+    }
+
+    /* Stage 卡片切换动画（打卡页 swipe）
+       Grid stack：所有卡重叠在同一个 cell，天然 carousel 效果 */
+    #checkin-stage { position: relative; display: grid; min-height: min(420px, 62vh); overflow: hidden; border-radius: 1.5rem; }
+    #checkin-stage > .stage-card { grid-area: 1 / 1; width: 100%; border-radius: 1.5rem; overflow: hidden; position: relative; will-change: transform; touch-action: pan-y; }
+    .stage-card.enter-from-right { animation: stageEnterRight 0.35s cubic-bezier(0.16, 1, 0.3, 1); }
+    .stage-card.enter-from-left  { animation: stageEnterLeft  0.35s cubic-bezier(0.16, 1, 0.3, 1); }
+    .stage-card.exit-to-left     { animation: stageExitLeft   0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards; pointer-events: none; }
+    .stage-card.exit-to-right    { animation: stageExitRight  0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards; pointer-events: none; }
+    .stage-card.enter-fade       { animation: stageFadeIn     0.25s ease-out; }
+    .stage-card.exit-fade        { animation: stageFadeOut    0.25s ease-out forwards; pointer-events: none; }
+    @keyframes stageEnterRight { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    @keyframes stageEnterLeft  { from { transform: translateX(-100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    @keyframes stageExitLeft   { from { transform: translateX(0); opacity: 1; } to { transform: translateX(-100%); opacity: 0; } }
+    @keyframes stageExitRight  { from { transform: translateX(0); opacity: 1; } to { transform: translateX(100%); opacity: 0; } }
+    @keyframes stageFadeIn     { from { opacity: 0; transform: scale(0.98); } to { opacity: 1; transform: scale(1); } }
+    @keyframes stageFadeOut    { from { opacity: 1; } to { opacity: 0; } }
+
+    /* 打卡点亮动画 */
+    .stage-card.is-lit.lit-pulse { animation: litPulse 0.6s cubic-bezier(0.34, 1.56, 0.64, 1); }
+    @keyframes litPulse {
+      0%   { transform: scale(1); }
+      35%  { transform: scale(1.025); box-shadow: 0 0 0 8px rgba(16,185,129,0.15); }
+      100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(16,185,129,0); }
+    }
+
+    /* 打卡 ripple（点击扩散） */
+    .checkin-ripple { position: absolute; border-radius: 9999px; pointer-events: none; animation: rippleExpand 0.6s ease-out forwards; }
+    @keyframes rippleExpand { 0% { transform: scale(0); opacity: 1; } 100% { transform: scale(1.2); opacity: 0; } }
+
+    /* 达标时的 ✨ 粒子爆开 */
+    .checkin-sparkle { position: absolute; pointer-events: none; font-size: 1.1rem; animation: sparkleFloat 0.9s ease-out forwards; }
+    @keyframes sparkleFloat {
+      0%   { transform: translate(-50%, -50%) scale(0.5); opacity: 1; }
+      100% { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(1.2); opacity: 0; }
+    }
+
+    /* 打卡页顶部进度条：全部完成时金色渐变 */
+    #hero-bar.is-full { background: linear-gradient(90deg, #f59e0b, #fde047, #f59e0b); }
+
+    details[open] summary svg { transform: rotate(90deg); }
+    details summary svg { transition: transform 0.2s ease; }
+
+    /* 打卡图标 - 浅色底圆 + emoji（克制版，避免色块过重） */
+    .checkin-icon-lg {
+      width: 2.5rem; height: 2.5rem; border-radius: 9999px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.25rem; flex-shrink: 0;
+      background: color-mix(in srgb, var(--icon-color) 15%, transparent);
+    }
+    .checkin-icon-sm {
+      width: 2rem; height: 2rem; border-radius: 9999px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1rem; flex-shrink: 0;
+      background: color-mix(in srgb, var(--icon-color) 15%, transparent);
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen">
+
+  <!-- PC 端统一顶部导航条（md 以上显示；移动端用底部 tab bar） -->
+  <nav class="hidden md:flex sticky top-0 z-30 items-center gap-1 px-6 h-14 bg-white/80 backdrop-blur-lg border-b border-slate-200">
+    <a href="/" class="flex items-center gap-2 mr-4 font-bold text-slate-800">
+      <svg class="w-6 h-6" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+        <defs><linearGradient id="navlogo" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#6366f1"/><stop offset="100%" stop-color="#4f46e5"/></linearGradient></defs>
+        <rect x="16" y="16" width="480" height="480" rx="108" fill="url(#navlogo)"/>
+        <rect x="140" y="100" width="8" height="312" rx="4" fill="rgba(255,255,255,0.25)"/>
+        <rect x="172" y="148" width="240" height="36" rx="18" fill="rgba(255,255,255,0.3)"/>
+        <rect x="172" y="238" width="200" height="36" rx="18" fill="rgba(255,255,255,0.3)"/>
+        <circle cx="120" cy="166" r="30" fill="#10b981"/><path d="M104 166 L115 178 L138 154" fill="none" stroke="white" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="120" cy="256" r="30" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="5"/>
+      </svg>
+      <span>MyTodo</span>
+    </a>
+    {% set nav_items = [
+      ('todos', '/', '待办', 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4'),
+      ('checkin', '/checkin', '打卡', 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z'),
+      ('timeline', '/timeline', '时间流', 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z'),
+      ('stats', '/stats', '统计', 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z'),
+      ('categories', '/categories', '分类', 'M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z'),
+      ('search', '/search', '搜索', 'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z'),
+    ] %}
+    {% for tab, href, label, icon in nav_items %}
+    <a href="{{ href }}" class="flex items-center gap-1.5 px-3 h-9 rounded-lg text-sm font-medium transition-colors {% if active_tab == tab %}bg-brand-50 text-brand-700{% else %}text-slate-500 hover:text-brand-600 hover:bg-slate-50{% endif %}">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="{{ icon }}"></path></svg>
+      <span>{{ label }}</span>
+    </a>
+    {% endfor %}
+  </nav>
+
+  {% block content %}{% endblock %}
+
+  <div id="toast-container" class="fixed z-[60] flex flex-col gap-2 pointer-events-none top-3 left-3 right-3 md:top-4 md:right-4 md:left-auto md:w-96"></div>
+
+  <div id="detail-backdrop" class="panel-backdrop hidden fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 opacity-0"></div>
+
+  <div id="detail-panel" class="detail-panel fixed inset-0 md:inset-auto md:top-0 md:right-0 md:bottom-0 md:w-[480px] bg-white z-50 flex flex-col">
+    <header class="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+      <h2 class="text-sm font-semibold text-slate-500 uppercase tracking-wider">任务详情</h2>
+      <button id="detail-close" class="btn-min w-9 h-9 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 flex items-center justify-center">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </header>
+    <div class="flex-1 overflow-y-auto p-5 space-y-5">
+      <div>
+        <input id="detail-title" type="text" placeholder="待办标题" maxlength="200"
+               class="w-full text-xl font-semibold text-slate-800 placeholder-slate-300 border-0 px-0 py-1 focus:ring-0 bg-transparent">
+        <p id="detail-completed" class="hidden text-xs text-emerald-600 mt-1 flex items-center gap-1">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          <span id="detail-completed-text"></span>
+        </p>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <div id="detail-priority" class="inline-flex rounded-full bg-slate-100 p-0.5 text-xs font-semibold">
+          <button data-p="high" class="px-3 py-1.5 rounded-full text-slate-500">高</button>
+          <button data-p="medium" class="px-3 py-1.5 rounded-full text-slate-500">中</button>
+          <button data-p="low" class="px-3 py-1.5 rounded-full text-slate-500">低</button>
+        </div>
+        <select id="detail-category" class="text-xs font-medium px-3 py-1.5 rounded-full bg-slate-100 text-slate-600 border-0 focus:ring-2 focus:ring-brand-300 cursor-pointer"></select>
+        <input id="detail-start" type="date" class="text-xs font-medium px-3 py-1.5 rounded-full bg-slate-100 text-slate-600 border-0 focus:ring-2 focus:ring-brand-300" title="开始日期">
+        <input id="detail-due" type="date" class="text-xs font-medium px-3 py-1.5 rounded-full bg-slate-100 text-slate-600 border-0 focus:ring-2 focus:ring-brand-300" title="截止日期">
+      </div>
+      <div class="flex flex-wrap items-center gap-2">
+        <span class="text-xs font-semibold text-slate-400">重复</span>
+        <select id="detail-recurrence" class="text-xs font-medium px-3 py-1.5 rounded-full bg-slate-100 text-slate-600 border-0 focus:ring-2 focus:ring-brand-300 cursor-pointer">
+          <option value="">不重复</option>
+          <option value="daily">每天</option>
+          <option value="weekly">每周</option>
+          <option value="biweekly">每两周</option>
+          <option value="monthly">每月</option>
+          <option value="custom">自定义天数</option>
+        </select>
+        <input type="number" id="detail-recurrence-interval" min="1" placeholder="天数"
+               class="hidden text-xs font-medium w-20 px-3 py-1.5 rounded-full bg-slate-100 text-slate-600 border-0 focus:ring-2 focus:ring-brand-300">
+        <label class="hidden items-center gap-1.5 text-xs text-slate-500 cursor-pointer" id="detail-copy-subtasks-label" style="display:none">
+          <input type="checkbox" id="detail-copy-subtasks" class="rounded border-slate-300 text-brand-600 focus:ring-brand-500">
+          <span>复制子任务</span>
+        </label>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">备注</label>
+        <textarea id="detail-description" placeholder="补充细节、链接、思路..." rows="4"
+                  class="w-full text-sm text-slate-700 placeholder-slate-300 border border-slate-200 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-brand-200 focus:border-brand-400 resize-y leading-relaxed"></textarea>
+      </div>
+      <div>
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-wider">子任务 <span id="subtask-progress" class="text-slate-400 normal-case font-normal"></span></h3>
+        </div>
+        <ul id="subtask-list" class="space-y-1.5"></ul>
+        <form id="add-subtask-form" class="mt-3 flex gap-2">
+          <input type="text" name="text" placeholder="+ 添加子任务，回车保存" maxlength="200"
+                 class="flex-1 text-sm border border-slate-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-200 focus:border-brand-400">
+        </form>
+      </div>
+    </div>
+    <footer class="border-t border-slate-100 p-4 flex gap-2 items-center">
+      <button id="detail-save" class="h-11 px-5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold transition-colors">保存</button>
+      <span id="save-indicator" class="text-xs text-emerald-600 font-medium opacity-0 transition-opacity duration-300">已保存 ✓</span>
+      <div class="flex-1"></div>
+      <button id="detail-complete" class="h-11 px-5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold transition-colors">标记完成</button>
+      <button id="detail-delete" class="btn-min px-4 rounded-lg bg-slate-100 hover:bg-red-50 text-slate-500 hover:text-red-600 text-sm font-medium transition-colors">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a2 2 0 012-2h2a2 2 0 012 2v3"/></svg>
+      </button>
+    </footer>
+  </div>
+
+  <!-- Settings 面板（左侧滑出） -->
+  <div id="settings-backdrop" class="panel-backdrop hidden fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 opacity-0"></div>
+  <div id="settings-panel" class="settings-panel fixed inset-y-0 left-0 w-[85vw] md:w-[400px] bg-white z-50 flex flex-col shadow-2xl">
+    <header class="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+      <h2 class="text-sm font-semibold text-slate-500 uppercase tracking-wider">设置</h2>
+      <button id="settings-close" class="btn-min w-9 h-9 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 flex items-center justify-center">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </header>
+    <div class="flex-1 overflow-y-auto p-5 space-y-5">
+      <!-- 主题切换器 -->
+      <div>
+        <h3 class="text-sm font-semibold text-slate-700 mb-3">外观</h3>
+        <div class="grid grid-cols-3 gap-2" id="theme-picker">
+          <button type="button" data-theme-val="default" class="theme-btn flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 border-slate-200 transition-all">
+            <div class="w-full h-8 rounded-md bg-slate-50 border border-slate-200 relative overflow-hidden">
+              <div class="absolute top-1 left-1 right-1 h-1.5 bg-brand-500 rounded-sm"></div>
+              <div class="absolute top-3.5 left-1 w-4 h-1 bg-slate-400 rounded-sm"></div>
+            </div>
+            <span class="text-xs font-medium text-slate-600">默认</span>
+          </button>
+          <button type="button" data-theme-val="light-premium" class="theme-btn flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 border-slate-200 transition-all">
+            <div class="w-full h-8 rounded-lg bg-white border border-slate-200 relative overflow-hidden shadow-sm">
+              <div class="absolute top-1 left-1 right-1 h-1.5 bg-brand-400 rounded-md"></div>
+              <div class="absolute top-3.5 left-1 w-4 h-1 bg-slate-500 rounded-md"></div>
+            </div>
+            <span class="text-xs font-medium text-slate-600">质感</span>
+          </button>
+          <button type="button" data-theme-val="dark" class="theme-btn flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 border-slate-200 transition-all">
+            <div class="w-full h-8 rounded-md bg-zinc-900 border border-zinc-700 relative overflow-hidden">
+              <div class="absolute top-1 left-1 right-1 h-1.5 bg-brand-400 rounded-sm"></div>
+              <div class="absolute top-3.5 left-1 w-4 h-1 bg-zinc-500 rounded-sm"></div>
+            </div>
+            <span class="text-xs font-medium text-slate-600">深色</span>
+          </button>
+        </div>
+      </div>
+      <div>
+        <h3 class="text-sm font-semibold text-slate-700 mb-3">添加分类</h3>
+        <form id="add-cat-form" class="space-y-3">
+          <input type="text" name="name" placeholder="分类名（如：阅读、健身）" required maxlength="50"
+                 class="w-full h-11 px-3.5 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-200 focus:border-brand-400">
+          <div>
+            <label class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 block">选择颜色</label>
+            <div class="flex flex-wrap gap-2.5" id="color-picker">
+              {% set preset_colors = ['#dc2626', '#ea580c', '#ca8a04', '#16a34a', '#0891b2', '#2563eb', '#7c3aed', '#9333ea', '#db2777', '#6b7280'] %}
+              {% for c in preset_colors %}
+              <button type="button" data-color="{{ c }}" class="color-btn w-9 h-9 rounded-full border-2 border-transparent hover:scale-110 transition-transform" style="background-color: {{ c }}"></button>
+              {% endfor %}
+            </div>
+            <input type="hidden" name="color" id="selected-color" value="#dc2626">
+          </div>
+          <button type="submit" class="w-full h-11 px-4 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-sm font-semibold transition-colors shadow-sm">添加分类</button>
+        </form>
+      </div>
+      <div>
+        <h3 class="text-sm font-semibold text-slate-700 mb-3">分类列表</h3>
+        <div id="cat-list" class="space-y-2"></div>
+        <div id="cat-empty" class="hidden text-center py-8">
+          <p class="text-xs text-slate-400">还没有分类</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <nav class="tab-bar fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-lg border-t border-slate-200 z-30 md:hidden">
+    <div class="flex justify-around items-center h-16 max-w-3xl mx-auto">
+      <a href="/" class="flex flex-col items-center gap-0.5 text-xs btn-min {% if active_tab == 'todos' %}text-brand-600{% else %}text-slate-400{% endif %}">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
+        <span class="font-medium">待办</span>
+      </a>
+      <a href="/checkin" class="flex flex-col items-center gap-0.5 text-xs btn-min {% if active_tab == 'checkin' %}text-emerald-600{% else %}text-slate-400{% endif %}">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        <span class="font-medium">打卡</span>
+      </a>
+      <a href="/timeline" class="flex flex-col items-center gap-0.5 text-xs btn-min {% if active_tab == 'timeline' %}text-brand-600{% else %}text-slate-400{% endif %}">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        <span class="font-medium">时间流</span>
+      </a>
+      <button type="button" id="more-tab-btn" class="flex flex-col items-center gap-0.5 text-xs btn-min {% if active_tab == 'stats' or active_tab == 'categories' or active_tab == 'search' %}text-brand-600{% else %}text-slate-400{% endif %}">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/></svg>
+        <span class="font-medium">更多</span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- 更多菜单：从「更多」按钮上方展开的小气泡 -->
+  <div id="more-backdrop" class="panel-backdrop hidden fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 opacity-0 md:hidden"></div>
+  <div id="more-sheet" class="more-sheet hidden md:hidden fixed w-40 bg-white z-50 rounded-2xl shadow-2xl ring-1 ring-slate-900/5">
+    <div class="more-caret"></div>
+    <div class="p-1.5 space-y-0.5">
+      <a href="/stats" class="more-item {% if active_tab == 'stats' %}more-item-active{% endif %}">
+        <span class="more-ico more-ico-indigo"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg></span>
+        <span class="more-item-label">统计</span>
+      </a>
+      <a href="/categories" class="more-item {% if active_tab == 'categories' %}more-item-active{% endif %}">
+        <span class="more-ico more-ico-amber"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/></svg></span>
+        <span class="more-item-label">分类</span>
+      </a>
+      <a href="/search" class="more-item {% if active_tab == 'search' %}more-item-active{% endif %}">
+        <span class="more-ico more-ico-teal"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg></span>
+        <span class="more-item-label">搜索</span>
+      </a>
+    </div>
+  </div>
+
+  <script>
+    // 更多菜单：气泡定位到「更多」按钮正上方，右边缘对齐
+    (function() {
+      const btn = document.getElementById('more-tab-btn');
+      const sheet = document.getElementById('more-sheet');
+      const backdrop = document.getElementById('more-backdrop');
+      if (!btn || !sheet || !backdrop) return;
+
+      const caret = sheet.querySelector('.more-caret');
+      function positionSheet() {
+        const r = btn.getBoundingClientRect();
+        // 右边缘与按钮右边缘对齐（稍内缩），底部留在按钮上方 10px（给小尾巴留位）
+        sheet.style.right = (window.innerWidth - r.right + 6) + 'px';
+        sheet.style.bottom = (window.innerHeight - r.top + 10) + 'px';
+        // 小尾巴水平对齐按钮中心：按钮中心距气泡右缘 = 按钮半宽 - 内缩 6px，再减半个尾巴宽
+        if (caret) caret.style.right = Math.max(10, r.width / 2 - 12) + 'px';
+      }
+
+      function openMore() {
+        sheet.classList.remove('hidden');
+        backdrop.classList.remove('hidden');
+        positionSheet();
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            sheet.classList.add('open');
+            backdrop.classList.add('open');
+          });
+        });
+      }
+      function closeMore() {
+        sheet.classList.remove('open');
+        backdrop.classList.remove('open');
+        setTimeout(() => { sheet.classList.add('hidden'); backdrop.classList.add('hidden'); }, 200);
+      }
+      btn.addEventListener('click', function(e) { e.stopPropagation(); openMore(); });
+      backdrop.addEventListener('click', closeMore);
+      // 窗口尺寸变化时重新定位（若打开着）
+      window.addEventListener('resize', function() { if (!sheet.classList.contains('hidden')) positionSheet(); });
+    })();
+  </script>
+
+  <script>
+    // 完成提示音（Web Audio API，无需资源文件）
+    let audioCtx = null;
+    function playCompleteSound() {
+      try {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const now = audioCtx.currentTime;
+        // 干脆的"叮"：高八度短促方波（像 iOS checkbox 勾选音）
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(1320, now);
+        osc.frequency.exponentialRampToValueAtTime(1760, now + 0.04);
+        gain.gain.setValueAtTime(0, now);
+        gain.gain.linearRampToValueAtTime(0.25, now + 0.005);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+        osc.connect(gain).connect(audioCtx.destination);
+        osc.start(now);
+        osc.stop(now + 0.2);
+      } catch (e) {}
+    }
+    function playUndoSound() {
+      try {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const now = audioCtx.currentTime;
+        // 短促低沉"嘟"
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = 440;
+        gain.gain.setValueAtTime(0, now);
+        gain.gain.linearRampToValueAtTime(0.12, now + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+        osc.connect(gain).connect(audioCtx.destination);
+        osc.start(now);
+        osc.stop(now + 0.15);
+      } catch (e) {}
+    }
+    window.playCompleteSound = playCompleteSound;
+    window.playUndoSound = playUndoSound;
+
+    function showToast(message, type, action) {
+      type = type || 'info';
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      toast.className = 'toast toast-' + type;
+      const icon = type === 'success' ? '<svg class="w-4 h-4 text-emerald-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>' :
+                    type === 'error' ? '<svg class="w-4 h-4 text-red-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg>' :
+                    '<svg class="w-4 h-4 text-brand-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>';
+      let actionHtml = '';
+      if (action && action.label) {
+        actionHtml = '<button class="ml-2 text-xs font-bold text-brand-600 hover:text-brand-700 px-2 py-1 rounded hover:bg-brand-50" data-toast-action>' + action.label + '</button>';
+      }
+      toast.innerHTML = icon + '<span class="flex-1">' + message + '</span>' + actionHtml;
+      container.appendChild(toast);
+      const duration = action ? 4000 : 2700;
+      const remove = () => { toast.classList.add('toast-out'); setTimeout(() => toast.remove(), 200); };
+      let timer = setTimeout(remove, duration);
+      if (action && action.onClick) {
+        toast.querySelector('[data-toast-action]').addEventListener('click', () => {
+          clearTimeout(timer);
+          action.onClick();
+          remove();
+        });
+      }
+    }
+
+    // 统一 fetch 包装：网络错误/非 2xx 自动弹 toast，返回 {ok, data, resp}
+    // 用法：const r = await apiFetch(url, opts); if (r.ok) { ... r.data ... }
+    // opts.silent = true 时不弹 toast（用于后台静默请求）
+    window.apiFetch = async function(url, opts) {
+      opts = opts || {};
+      const silent = opts.silent; delete opts.silent;
+      try {
+        const resp = await fetch(url, opts);
+        if (!resp.ok) {
+          let detail = '';
+          try { detail = (await resp.clone().json()).detail || ''; } catch (e) {}
+          if (!silent) showToast(detail || '操作失败（' + resp.status + '）', 'error');
+          return { ok: false, resp, data: null };
+        }
+        const ct = resp.headers.get('content-type') || '';
+        const data = ct.includes('application/json') ? await resp.json() : await resp.text();
+        return { ok: true, resp, data };
+      } catch (e) {
+        // 网络错误 / 服务器无响应
+        if (!silent) showToast('网络错误，请检查连接', 'error');
+        return { ok: false, resp: null, data: null };
+      }
+    };
+
+    function escapeHtml(s) {
+      if (!s) return '';
+      return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+    }
+
+    // Settings 面板（左侧滑出）
+    function openSettings() {
+      const panel = document.getElementById('settings-panel');
+      const backdrop = document.getElementById('settings-backdrop');
+      panel.classList.remove('hidden');
+      backdrop.classList.remove('hidden');
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          panel.classList.add('open');
+          backdrop.classList.add('open');
+        });
+      });
+      loadSettingsCategories();
+      syncThemePicker();
+    }
+
+    // 主题切换：选中高亮 + 应用 + 持久化
+    function syncThemePicker() {
+      const current = document.documentElement.getAttribute('data-theme') || 'default';
+      document.querySelectorAll('.theme-btn').forEach(btn => {
+        const active = btn.dataset.themeVal === current;
+        btn.className = 'theme-btn flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 transition-all ' +
+          (active ? 'border-brand-500 bg-brand-50' : 'border-slate-200');
+        btn.querySelector('span').className = 'text-xs font-medium ' + (active ? 'text-brand-600' : 'text-slate-600');
+      });
+    }
+    document.querySelectorAll('.theme-btn').forEach(btn => {
+      btn.addEventListener('click', function() {
+        const val = this.dataset.themeVal;
+        if (window.loadThemeFonts) window.loadThemeFonts(val);  // 切到质感版才注入 MiSans
+        // 切换瞬间禁用过渡：瞬时换肤，而不是全页 150ms 动画重绘
+        document.documentElement.classList.add('no-transitions');
+        document.documentElement.setAttribute('data-theme', val);
+        localStorage.setItem('mytodo-theme', val);
+        syncThemePicker();
+        requestAnimationFrame(() => requestAnimationFrame(() => document.documentElement.classList.remove('no-transitions')));
+      });
+    });
+    function closeSettings() {
+      const panel = document.getElementById('settings-panel');
+      const backdrop = document.getElementById('settings-backdrop');
+      panel.classList.remove('open');
+      backdrop.classList.remove('open');
+      setTimeout(() => {
+        panel.classList.add('hidden');
+        backdrop.classList.add('hidden');
+      }, 300);
+    }
+    document.getElementById('settings-close').addEventListener('click', closeSettings);
+    document.getElementById('settings-backdrop').addEventListener('click', closeSettings);
+
+    async function loadSettingsCategories() {
+      const r = await apiFetch('/api/categories', {silent: true});
+      if (r.ok) renderSettingsCategories(r.data);
+    }
+    function renderSettingsCategories(cats) {
+      const list = document.getElementById('cat-list');
+      const empty = document.getElementById('cat-empty');
+      if (cats.length === 0) {
+        list.innerHTML = '';
+        empty.classList.remove('hidden');
+        return;
+      }
+      empty.classList.add('hidden');
+      list.innerHTML = cats.map(c => `
+        <div class="flex items-center gap-3 p-2.5 rounded-xl bg-slate-50 border border-slate-100">
+          <span class="w-5 h-5 rounded-full flex-shrink-0 ring-2 ring-white shadow-sm" style="background-color: ${c.color}"></span>
+          <div class="flex-1 min-w-0">
+            <div class="text-sm font-medium text-slate-800 truncate">${escapeHtml(c.name)}</div>
+            <div class="text-xs text-slate-500">${c.todo_count} 个待办</div>
+          </div>
+          <button onclick="deleteSettingsCategory(${c.id}, ${c.todo_count})" class="w-8 h-8 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 flex items-center justify-center flex-shrink-0 transition-all">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a2 2 0 012-2h2a2 2 0 012 2v3"/></svg>
+          </button>
+        </div>
+      `).join('');
+    }
+    async function deleteSettingsCategory(id, count) {
+      if (count > 0) {
+        showToast('分类下还有 ' + count + ' 个待办，无法删除', 'error');
+        return;
+      }
+      if (!confirm('确定删除这个分类吗？')) return;
+      const resp = await apiFetch('/api/categories/' + id, {method: 'DELETE'});
+      if (resp.ok) {
+        showToast('已删除', 'success');
+        loadSettingsCategories();
+      }
+    }
+
+    // 颜色选择器（settings panel 内）
+    document.querySelectorAll('#settings-panel .color-btn').forEach((btn, idx) => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#settings-panel .color-btn').forEach(b => {
+          b.classList.remove('border-slate-800');
+          b.classList.add('border-transparent');
+        });
+        btn.classList.add('border-slate-800');
+        btn.classList.remove('border-transparent');
+        document.getElementById('selected-color').value = btn.dataset.color;
+      });
+      if (idx === 0) {
+        btn.classList.add('border-slate-800');
+        btn.classList.remove('border-transparent');
+      }
+    });
+
+    // 添加分类表单（settings panel 内）
+    document.getElementById('add-cat-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const body = { name: fd.get('name'), color: fd.get('color') };
+      const resp = await apiFetch('/api/categories', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(body),
+      });
+      if (resp.ok) {
+        e.target.reset();
+        document.querySelectorAll('#settings-panel .color-btn').forEach((b, i) => {
+          if (i === 0) { b.classList.add('border-slate-800'); b.classList.remove('border-transparent'); }
+          else { b.classList.remove('border-slate-800'); b.classList.add('border-transparent'); }
+        });
+        document.getElementById('selected-color').value = '#dc2626';
+        showToast('已添加分类', 'success');
+        loadSettingsCategories();
+      }
+    });
+  </script>
+
+  <!-- ========== 共享：日期/时区工具 ==========
+       后端用 CST(Asia/Shanghai) 写入 date / completed_at（ISO 字符串带 UTC 偏移）。
+       前端必须用"本地日期"切分，不能用 toISOString()（那是 UTC，凌晨会差一天）。
+       所有页面通过 window.localDateStr(date) 取 YYYY-MM-DD。
+  -->
+  <script>
+    // 返回本地时区的 YYYY-MM-DD（与后端 CST date 字段口径一致）
+    function localDateStr(d) {
+      d = d || new Date();
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    }
+    // 从 ISO 字符串取"本地日期"的 YYYY-MM-DD（处理带时区的 completed_at）
+    // 不再用 .slice(0,10)，因为那是 UTC；先 new Date 再转本地。
+    function localDateFromISO(iso) {
+      if (!iso) return null;
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return null;
+      return localDateStr(d);
+    }
+    window.localDateStr = localDateStr;
+    window.localDateFromISO = localDateFromISO;
+  </script>
+
+  <!-- ========== 共享：任务详情面板逻辑 ==========
+       详情面板的 DOM 在本 base.html 里，所以交互逻辑也集中在这里，
+       所有继承页面（timeline/search/categories/stats/checkin）都能点击打开详情。
+       各页面的卡片需调用全局 openDetail(id)（多数 render*Card 已带 onclick=openDetail）。
+  -->
+  <script>
+    window.PRIORITY_LABEL = window.PRIORITY_LABEL || {high: '高', medium: '中', low: '低'};
+    window.RECURRENCE_LABEL = window.RECURRENCE_LABEL || {daily:'每天', weekly:'每周', biweekly:'双周', monthly:'每月', custom:'自定义'};
+
+    // 详情面板状态（全局，所有页面共用一份）
+    let _detail = { id: null, status: 'pending', subtasks: [], categories: [], saveTimer: null };
+
+    async function _ensureCategories() {
+      if (_detail.categories.length) return;
+      const r = await apiFetch('/api/categories', {silent: true});
+      if (r.ok) _detail.categories = r.data;
+      else _detail.categories = [];
+    }
+
+    async function openDetail(id) {
+      const resp = await apiFetch('/api/todos/' + id, {silent: true});
+      if (!resp.ok) { showToast('加载失败', 'error'); return; }
+      const todo = resp.data;
+      await _ensureCategories();
+
+      _detail.id = id;
+      _detail.status = todo.status;
+
+      document.getElementById('detail-title').value = todo.title;
+      document.getElementById('detail-description').value = todo.description || '';
+      document.getElementById('detail-category').innerHTML = '<option value="">无分类</option>' +
+        _detail.categories.map(c => `<option value="${c.id}" ${c.id === todo.category_id ? 'selected' : ''}>${escapeHtml(c.name)}</option>`).join('');
+      document.getElementById('detail-category').value = todo.category_id || '';
+      document.getElementById('detail-start').value = todo.start_date || '';
+      document.getElementById('detail-due').value = todo.due_date || '';
+
+      // 重复设置
+      const recSelect = document.getElementById('detail-recurrence');
+      recSelect.value = todo.recurrence_type || '';
+      const recInterval = document.getElementById('detail-recurrence-interval');
+      const copyLabel = document.getElementById('detail-copy-subtasks-label');
+      const copyCheck = document.getElementById('detail-copy-subtasks');
+      if (todo.recurrence_type === 'custom') {
+        recInterval.classList.remove('hidden');
+        recInterval.value = todo.recurrence_interval || '';
+      } else {
+        recInterval.classList.add('hidden');
+      }
+      if (todo.recurrence_type) {
+        copyLabel.style.display = 'flex';
+        copyCheck.checked = todo.recurrence_copy_subtasks || false;
+      } else {
+        copyLabel.style.display = 'none';
+      }
+
+      document.querySelectorAll('#detail-priority button').forEach(b => {
+        const active = b.dataset.p === todo.priority;
+        b.className = 'px-3 py-1.5 rounded-full transition-colors ' + (active ? 'bg-white text-brand-700 shadow-sm font-semibold' : 'text-slate-500 font-semibold');
+      });
+
+      // 完成时间：completed_at 是 UTC ISO 串，转成本地日期+时分显示；仅已完成时展示
+      const doneEl = document.getElementById('detail-completed');
+      const doneTxt = document.getElementById('detail-completed-text');
+      if (todo.status === 'done' && todo.completed_at) {
+        const d = new Date(todo.completed_at);
+        const ds = localDateStr(d);
+        const ts = d.toLocaleTimeString('zh-CN', {hour: '2-digit', minute: '2-digit', hour12: false});
+        doneTxt.textContent = '完成于 ' + ds + ' ' + ts;
+        doneEl.classList.remove('hidden');
+      } else {
+        doneEl.classList.add('hidden');
+      }
+
+      const completeBtn = document.getElementById('detail-complete');
+      if (todo.status === 'done') {
+        completeBtn.textContent = '重新打开';
+        completeBtn.className = 'h-11 px-5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-700 text-sm font-semibold transition-colors';
+      } else {
+        completeBtn.textContent = '标记完成';
+        completeBtn.className = 'h-11 px-5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold transition-colors';
+      }
+
+      await loadSubtasks(id);
+      showPanel();
+      // 通知当前页面刷新列表（页面可自行实现）
+      if (typeof loadTodos === 'function') loadTodos();
+    }
+    window.openDetail = openDetail;
+
+    function showPanel() {
+      const panel = document.getElementById('detail-panel');
+      const backdrop = document.getElementById('detail-backdrop');
+      panel.classList.remove('hidden');
+      backdrop.classList.remove('hidden');
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          panel.classList.add('open');
+          backdrop.classList.add('open');
+        });
+      });
+    }
+
+    function closeDetail() {
+      const panel = document.getElementById('detail-panel');
+      const backdrop = document.getElementById('detail-backdrop');
+      panel.classList.remove('open');
+      backdrop.classList.remove('open');
+      setTimeout(() => {
+        panel.classList.add('hidden');
+        backdrop.classList.add('hidden');
+        _detail.id = null;
+      }, 300);
+    }
+
+    async function loadSubtasks(todoId) {
+      const r = await apiFetch('/api/todos/' + todoId + '/subtasks', {silent: true});
+      if (!r.ok) return;
+      _detail.subtasks = r.data;
+      renderSubtasks();
+    }
+
+    function renderSubtasks() {
+      const list = document.getElementById('subtask-list');
+      const progress = document.getElementById('subtask-progress');
+      if (_detail.subtasks.length === 0) {
+        list.innerHTML = '<li class="text-xs text-slate-400 italic py-2 px-1">还没有子任务，下方添加一个吧</li>';
+        progress.textContent = '';
+        return;
+      }
+      const done = _detail.subtasks.filter(s => s.done).length;
+      progress.textContent = done + ' / ' + _detail.subtasks.length;
+      list.innerHTML = _detail.subtasks.map(s => `
+        <li class="flex items-center gap-2 p-2 rounded-lg hover:bg-slate-50 group subtask-enter">
+          <button onclick="toggleSubtask(${s.id}, ${!s.done})"
+                  class="check-btn w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-all ${s.done ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-slate-300'}">
+            ${s.done ? '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>' : ''}
+          </button>
+          <span class="text-sm flex-1 break-words ${s.done ? 'line-through text-slate-400' : 'text-slate-700'}">${escapeHtml(s.text)}</span>
+          <button onclick="deleteSubtask(${s.id})"
+                  class="w-7 h-7 rounded text-slate-300 md:opacity-0 md:group-hover:opacity-100 hover:text-red-500 hover:bg-red-50 flex items-center justify-center transition-all"
+                  title="删除">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+          </button>
+        </li>
+      `).join('');
+    }
+
+    async function toggleSubtask(id, done) {
+      if (!_detail.id) return;
+      const r = await apiFetch('/api/subtasks/' + id, {
+        method: 'PATCH',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({done}),
+      });
+      if (r.ok) await loadSubtasks(_detail.id);
+    }
+
+    async function deleteSubtask(id) {
+      if (!_detail.id) return;
+      if (!confirm('删除这个子任务？')) return;
+      const r = await apiFetch('/api/subtasks/' + id, {method: 'DELETE'});
+      if (r.ok) { await loadSubtasks(_detail.id); showToast('已删除', 'success'); }
+    }
+
+    function scheduleDetailSave() {
+      clearTimeout(_detail.saveTimer);
+      _detail.saveTimer = setTimeout(saveDetail, 500);
+    }
+
+    function flashSaveIndicator() {
+      const indicator = document.getElementById('save-indicator');
+      indicator.style.opacity = '1';
+      setTimeout(() => { indicator.style.opacity = '0'; }, 1500);
+    }
+
+    function _collectDetailBody() {
+      const title = document.getElementById('detail-title').value.trim();
+      const activeP = document.querySelector('#detail-priority button.bg-white');
+      const body = {
+        title,
+        description: document.getElementById('detail-description').value,
+        category_id: document.getElementById('detail-category').value ? parseInt(document.getElementById('detail-category').value) : null,
+        start_date: document.getElementById('detail-start').value || null,
+        due_date: document.getElementById('detail-due').value || null,
+        priority: activeP ? activeP.dataset.p : 'medium',
+      };
+      const recType = document.getElementById('detail-recurrence').value;
+      body.recurrence_type = recType || null;
+      body.recurrence_copy_subtasks = recType ? document.getElementById('detail-copy-subtasks').checked : false;
+      if (recType === 'custom') {
+        body.recurrence_interval = parseInt(document.getElementById('detail-recurrence-interval').value) || 1;
+      } else {
+        body.recurrence_interval = null;
+      }
+      return { title, body };
+    }
+
+    async function saveDetail() {
+      if (!_detail.id) return;
+      const { title, body } = _collectDetailBody();
+      if (!title) return;
+      const resp = await apiFetch('/api/todos/' + _detail.id, {
+        method: 'PATCH',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(body),
+      });
+      if (resp.ok) {
+        if (typeof loadTodos === 'function') loadTodos();
+        flashSaveIndicator();
+      }
+    }
+
+    // 绑定面板事件（只绑一次）
+    (function bindDetailPanel() {
+      document.getElementById('detail-recurrence').addEventListener('change', function() {
+        const isCustom = this.value === 'custom';
+        const hasRecurrence = !!this.value;
+        document.getElementById('detail-recurrence-interval').classList.toggle('hidden', !isCustom);
+        document.getElementById('detail-copy-subtasks-label').style.display = hasRecurrence ? 'flex' : 'none';
+        scheduleDetailSave();
+      });
+
+      ['detail-title', 'detail-description', 'detail-category', 'detail-start', 'detail-due', 'detail-recurrence-interval', 'detail-copy-subtasks'].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener('input', scheduleDetailSave);
+        el.addEventListener('change', scheduleDetailSave);
+      });
+
+      document.querySelectorAll('#detail-priority button').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('#detail-priority button').forEach(b => {
+            b.className = 'px-3 py-1.5 rounded-full text-slate-500 font-semibold transition-colors';
+          });
+          btn.className = 'px-3 py-1.5 rounded-full bg-white text-brand-700 shadow-sm font-semibold transition-colors';
+          scheduleDetailSave();
+        });
+      });
+
+      document.getElementById('detail-close').addEventListener('click', closeDetail);
+      document.getElementById('detail-backdrop').addEventListener('click', closeDetail);
+      document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && _detail.id) closeDetail(); });
+
+      document.getElementById('add-subtask-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (!_detail.id) return;
+        const input = e.target.querySelector('input');
+        const text = input.value.trim();
+        if (!text) return;
+        const resp = await apiFetch('/api/todos/' + _detail.id + '/subtasks', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({text}),
+        });
+        if (resp.ok) { await loadSubtasks(_detail.id); input.value = ''; input.focus(); }
+      });
+
+      document.getElementById('detail-save').addEventListener('click', async () => {
+        clearTimeout(_detail.saveTimer);
+        if (!_detail.id) return;
+        const { title, body } = _collectDetailBody();
+        if (!title) { showToast('标题不能为空', 'error'); return; }
+        try {
+          const resp = await apiFetch('/api/todos/' + _detail.id, {
+            method: 'PATCH',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(body),
+          });
+          if (resp.ok) { if (typeof loadTodos === 'function') loadTodos(); showToast('已保存', 'success'); }
+        } catch (e) { showToast('保存失败', 'error'); }
+      });
+
+      document.getElementById('detail-complete').addEventListener('click', async () => {
+        if (!_detail.id) return;
+        const endpoint = _detail.status === 'done' ? 'reopen' : 'complete';
+        const resp = await apiFetch('/api/todos/' + _detail.id + '/' + endpoint, {method: 'POST'});
+        if (resp.ok) {
+          if (_detail.status === 'done') {
+            showToast('已重新打开', 'success');
+            playUndoSound();
+          } else {
+            const data = resp.data;
+            showToast(data.next_todo_id ? '已完成，已生成下次待办' : '已完成', 'success');
+            playCompleteSound();
+          }
+          _detail.status = _detail.status === 'done' ? 'pending' : 'done';
+          const btn = document.getElementById('detail-complete');
+          if (_detail.status === 'done') {
+            btn.textContent = '重新打开';
+            btn.className = 'h-11 px-5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-700 text-sm font-semibold transition-colors';
+          } else {
+            btn.textContent = '标记完成';
+            btn.className = 'h-11 px-5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold transition-colors';
+          }
+          if (typeof loadTodos === 'function') loadTodos();
+        }
+      });
+
+      document.getElementById('detail-delete').addEventListener('click', async () => {
+        if (!_detail.id) return;
+        if (!confirm('确定要删除这个待办吗？此操作无法撤销。')) return;
+        const resp = await apiFetch('/api/todos/' + _detail.id, {method: 'DELETE'});
+        if (resp.ok) { showToast('已删除', 'success'); closeDetail(); if (typeof loadTodos === 'function') loadTodos(); }
+      });
+    })();
+  </script>
+
+  {% block scripts %}{% endblock %}
+  <!-- PWA：注册 service worker（静态资源缓存） -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('/static/sw.js', {scope: '/'}).catch(function(e) {
+          console.warn('SW 注册失败:', e);
+        });
+      });
+    }
+  </script>
+</body>
+</html>

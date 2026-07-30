@@ -1,0 +1,288 @@
+{% extends "base.html" %}
+
+{% block title %}MyTodo - 时间流{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto px-4 py-6 md:py-8">
+
+  <div class="flex items-center justify-between mb-6">
+    <div>
+      <h1 class="text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
+        <svg class="w-7 h-7 text-brand-500 cursor-pointer" onclick="openSettings()" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        时间流
+      </h1>
+      <p class="text-sm text-slate-500 mt-1" id="timeline-stats">加载中...</p>
+    </div>
+  </div>
+
+  <!-- 筛选 -->
+  <div class="flex gap-2 mb-4 overflow-x-auto scroll-x -mx-1 px-1">
+    <button data-filter="all" class="filter-btn btn-min px-4 py-2 rounded-full text-sm font-medium bg-white text-slate-600 border border-slate-200 whitespace-nowrap hover:bg-slate-50">全部</button>
+    <button data-filter="pending" class="filter-btn btn-min px-4 py-2 rounded-full text-sm font-medium bg-brand-600 text-white whitespace-nowrap shadow-sm">进行中</button>
+    <button data-filter="done" class="filter-btn btn-min px-4 py-2 rounded-full text-sm font-medium bg-white text-slate-600 border border-slate-200 whitespace-nowrap hover:bg-slate-50">已完成</button>
+    <button data-filter="recurring" class="filter-btn btn-min px-4 py-2 rounded-full text-sm font-medium bg-white text-slate-600 border border-slate-200 whitespace-nowrap hover:bg-slate-50">循环</button>
+  </div>
+
+  <div id="cat-filter-wrap" class="mb-6 relative">
+    <button type="button" id="cat-filter-toggle" class="cat-chip btn-min px-3 py-1.5 rounded-full text-xs font-medium bg-slate-900 text-white whitespace-nowrap inline-flex items-center gap-1.5">
+      <span id="cat-filter-label" class="inline-flex items-center gap-1.5">全部分类</span>
+      <svg id="cat-filter-icon" class="w-3.5 h-3.5 transition-transform" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+    </button>
+    <div id="cat-filter-list" class="hidden absolute z-20 mt-2 bg-white rounded-xl border border-slate-200 shadow-lg p-2 flex flex-wrap gap-1.5 max-w-md">
+      <button data-cat="" class="cat-chip btn-min px-3 py-1.5 rounded-full text-xs font-medium bg-white text-slate-600 border border-slate-200 whitespace-nowrap hover:bg-slate-50">全部分类</button>
+      {% for cat in categories %}
+      <button data-cat="{{ cat.id }}" class="cat-chip btn-min px-3 py-1.5 rounded-full text-xs font-medium bg-white text-slate-600 border border-slate-200 whitespace-nowrap hover:bg-slate-50">
+        <span class="inline-block w-1.5 h-1.5 rounded-full mr-1.5 align-middle" style="background-color: {{ cat.color }}"></span>{{ cat.name }}
+      </button>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- 时间线容器 -->
+  <div id="timeline-container" class="relative pl-8 md:pl-10">
+    <div class="absolute left-3 md:left-4 top-0 bottom-0 w-0.5 bg-slate-200"></div>
+    <div id="timeline-list"></div>
+  </div>
+
+  <div id="empty-state" class="hidden text-center py-16">
+    <svg class="mx-auto w-24 h-24" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="50" cy="50" r="35" fill="none" stroke="#e2e8f0" stroke-width="3"/>
+      <path d="M50 30v20l12 8" fill="none" stroke="#cbd5e1" stroke-width="3" stroke-linecap="round"/>
+    </svg>
+    <p class="mt-4 text-sm font-medium text-slate-600">暂无记录</p>
+    <p class="mt-1 text-xs text-slate-400">添加待办后会在这里形成时间流</p>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const PRIORITY_LABEL = {high: '高', medium: '中', low: '低'};
+const RECURRENCE_LABEL = {daily:'每天', weekly:'每周', biweekly:'双周', monthly:'每月', custom:'自定义'};
+let allTodos = [];
+let currentFilter = 'pending';
+let currentCat = '';
+
+function formatDateFull(d) {
+  if (!d) return '';
+  const dt = new Date(d);
+  return dt.getFullYear() + '年' + (dt.getMonth() + 1) + '月' + dt.getDate() + '日';
+}
+
+function getDateLabel(dateStr) {
+  if (!dateStr || dateStr === '0000-00-00') return '未设日期';
+  const d = new Date(dateStr + 'T00:00:00');
+  if (isNaN(d.getTime())) return '未设日期';
+  const today = new Date(); today.setHours(0,0,0,0);
+  const diff = Math.floor((today - d) / 86400000);
+  if (diff === 0) return '今天';
+  if (diff === 1) return '昨天';
+  if (diff === 2) return '前天';
+  if (diff > 0 && diff < 7) return diff + '天前';
+  if (diff === -1) return '明天';
+  if (diff < 0 && diff > -7) return Math.abs(diff) + '天后';
+  return formatDateFull(dateStr);
+}
+
+function formatWeekday(dateStr) {
+  if (!dateStr || dateStr === '0000-00-00') return '';
+  const d = new Date(dateStr + 'T00:00:00');
+  if (isNaN(d.getTime())) return '';
+  const days = ['周日','周一','周二','周三','周四','周五','周六'];
+  return days[d.getDay()];
+}
+
+async function loadTodos() {
+  const r = await apiFetch('/api/todos', {silent: true});
+  if (!r.ok) { showToast('加载失败', 'error'); return; }
+  allTodos = r.data;
+  renderTimeline();
+  updateStats();
+}
+
+function updateStats() {
+  const total = allTodos.length;
+  const done = allTodos.filter(t => t.status === 'done').length;
+  const recurring = allTodos.filter(t => t.recurrence_type).length;
+  let s = total + ' 条记录';
+  if (done > 0) s += ' · ' + done + ' 已完成';
+  if (recurring > 0) s += ' · ' + recurring + ' 循环';
+  document.getElementById('timeline-stats').textContent = s;
+}
+
+function getFilteredTodos() {
+  let list = allTodos;
+  if (currentFilter === 'pending') list = list.filter(t => t.status === 'pending');
+  else if (currentFilter === 'done') list = list.filter(t => t.status === 'done');
+  else if (currentFilter === 'recurring') list = list.filter(t => !!t.recurrence_type);
+  if (currentCat) list = list.filter(t => t.category_id == currentCat);
+  return list;
+}
+
+function groupByDate(todos) {
+  const groups = {};
+  const noDate = [];
+  for (const t of todos) {
+    if (!t.due_date) { noDate.push(t); continue; }
+    if (!groups[t.due_date]) groups[t.due_date] = [];
+    groups[t.due_date].push(t);
+  }
+  // 按日期正序：过去 → 今天 → 未来，越往下越远
+  const sorted = Object.entries(groups).sort((a, b) => a[0].localeCompare(b[0]));
+  if (noDate.length > 0) sorted.push(['0000-00-00', noDate]);
+  return sorted;
+}
+
+function renderTimeline() {
+  const container = document.getElementById('timeline-list');
+  const empty = document.getElementById('empty-state');
+  const filtered = getFilteredTodos();
+
+  if (filtered.length === 0) {
+    container.innerHTML = '';
+    empty.classList.remove('hidden');
+    return;
+  }
+  empty.classList.add('hidden');
+
+  const groups = groupByDate(filtered);
+  let html = '';
+
+  for (const [dateStr, todos] of groups) {
+    const label = getDateLabel(dateStr);
+    const weekday = formatWeekday(dateStr);
+    const isPast = dateStr < localDateStr();  // 本地日期比较
+
+    html += `
+    <div class="mb-6 anim-fade-in">
+      <!-- 日期节点 -->
+      <div class="flex items-center gap-3 mb-3 -ml-8 md:-ml-10">
+        <div class="w-6 h-6 md:w-8 md:h-8 rounded-full bg-brand-100 border-2 border-brand-400 flex items-center justify-center flex-shrink-0 z-10">
+          <div class="w-2 h-2 rounded-full bg-brand-500"></div>
+        </div>
+        <div>
+          <span class="text-sm font-bold text-slate-800">${label}</span>
+          <span class="text-xs text-slate-400 ml-1.5">${weekday}</span>
+          ${dateStr !== '0000-00-00' ? `<span class="text-xs text-slate-300 ml-1">${dateStr}</span>` : ''}
+        </div>
+        <span class="ml-auto text-xs font-medium text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">${todos.length}</span>
+      </div>
+      <!-- 该日期下的待办 -->
+      <div class="space-y-2 ml-0 md:ml-0">
+        ${todos.map(t => renderTimelineItem(t)).join('')}
+      </div>
+    </div>`;
+  }
+
+  container.innerHTML = html;
+}
+
+function renderTimelineItem(t) {
+  const prio = PRIORITY_LABEL[t.priority] || '中';
+  const isDone = t.status === 'done';
+  const isOverdue = !isDone && t.due_date && new Date(t.due_date) < new Date(new Date().toDateString());
+
+  // 状态图标
+  let statusIcon;
+  if (isDone) {
+    statusIcon = '<div class="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0"><svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg></div>';
+  } else if (isOverdue) {
+    statusIcon = '<div class="w-5 h-5 rounded-full bg-red-500 flex items-center justify-center flex-shrink-0"><svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 8v4m0 4h.01"/></svg></div>';
+  } else {
+    statusIcon = '<div class="w-5 h-5 rounded-full border-2 border-slate-300 flex-shrink-0"></div>';
+  }
+
+  // 标签
+  let badges = '';
+  badges += `<span class="priority-pill priority-${t.priority}">${prio}</span>`;
+  if (t.category_name) {
+    badges += `<span class="cat-pill" style="background-color: ${t.category_color}1a; color: ${t.category_color}"><span class="dot" style="background-color: ${t.category_color}"></span>${escapeHtml(t.category_name)}</span>`;
+  }
+  if (t.recurrence_type) {
+    badges += `<span class="inline-flex items-center gap-0.5 text-xs font-medium text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded-full"><svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>${RECURRENCE_LABEL[t.recurrence_type]}</span>`;
+  }
+
+  // 时间
+  const timeStr = t.completed_at ? new Date(t.completed_at).toLocaleTimeString('zh-CN', {hour: '2-digit', minute: '2-digit'}) : '';
+
+  return `
+  <div class="flex items-start gap-3 bg-white rounded-xl border border-slate-200 p-3 hover:shadow-sm transition-shadow cursor-pointer ${isDone ? 'opacity-60' : ''}" onclick="openDetail(${t.id})">
+    ${statusIcon}
+    <div class="flex-1 min-w-0">
+      <div class="flex items-center gap-1.5 mb-1 flex-wrap">${badges}</div>
+      <div class="text-sm font-semibold text-slate-800 ${isDone ? 'line-through text-slate-500' : ''} break-words">${escapeHtml(t.title)}</div>
+      ${t.description ? `<div class="text-xs text-slate-400 mt-0.5 line-clamp-1 break-words">${escapeHtml(t.description)}</div>` : ''}
+    </div>
+    ${timeStr ? `<span class="text-xs text-slate-300 flex-shrink-0 mt-1">${timeStr}</span>` : ''}
+  </div>`;
+}
+
+// 筛选按钮
+document.querySelectorAll('.filter-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.filter-btn').forEach(b => {
+      b.className = 'filter-btn btn-min px-4 py-2 rounded-full text-sm font-medium bg-white text-slate-600 border border-slate-200 whitespace-nowrap hover:bg-slate-50';
+    });
+    btn.className = 'filter-btn btn-min px-4 py-2 rounded-full text-sm font-medium bg-brand-600 text-white whitespace-nowrap shadow-sm';
+    currentFilter = btn.dataset.filter;
+    renderTimeline();
+  });
+});
+
+// 分类筛选下拉
+const catToggle = document.getElementById('cat-filter-toggle');
+const catList = document.getElementById('cat-filter-list');
+const catIcon = document.getElementById('cat-filter-icon');
+const catLabel = document.getElementById('cat-filter-label');
+
+catToggle.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (catList.classList.contains('hidden')) {
+    catList.classList.remove('hidden');
+    catIcon.style.transform = 'rotate(180deg)';
+  } else {
+    catList.classList.add('hidden');
+    catIcon.style.transform = '';
+  }
+});
+
+document.addEventListener('click', (e) => {
+  if (!catList.contains(e.target) && !catToggle.contains(e.target)) {
+    catList.classList.add('hidden');
+    catIcon.style.transform = '';
+  }
+});
+
+function updateCatTrigger() {
+  const active = document.querySelector('#cat-filter-list .cat-chip.bg-slate-900');
+  if (active) {
+    const dot = active.querySelector('.inline-block');
+    const color = dot ? dot.style.backgroundColor : '';
+    const name = active.textContent.trim();
+    catLabel.innerHTML = (color ? `<span class="inline-block w-1.5 h-1.5 rounded-full mr-1.5 align-middle" style="background-color:${color}"></span>` : '') + name;
+  } else {
+    catLabel.textContent = '全部分类';
+  }
+}
+
+document.querySelectorAll('#cat-filter-list .cat-chip').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#cat-filter-list .cat-chip').forEach(b => {
+      b.className = 'cat-chip btn-min px-3 py-1.5 rounded-full text-xs font-medium bg-white text-slate-600 border border-slate-200 whitespace-nowrap hover:bg-slate-50';
+      const dot = b.querySelector('.inline-block');
+      if (dot) b.insertBefore(dot, b.firstChild);
+    });
+    btn.className = 'cat-chip btn-min px-3 py-1.5 rounded-full text-xs font-medium bg-slate-900 text-white whitespace-nowrap';
+    currentCat = btn.dataset.cat || '';
+    updateCatTrigger();
+    catList.classList.add('hidden');
+    catIcon.style.transform = '';
+    renderTimeline();
+  });
+});
+
+(async () => {
+  await loadTodos();
+})();
+</script>
+{% endblock %}

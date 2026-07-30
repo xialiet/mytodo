@@ -1,0 +1,377 @@
+{% extends "base.html" %}
+
+{% block title %}MyTodo - 统计{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto px-4 py-6 md:py-8">
+
+  <div class="flex items-center justify-between mb-6">
+    <div>
+      <h1 class="text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
+        <svg class="w-7 h-7 text-brand-500 cursor-pointer" onclick="openSettings()" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+        统计
+      </h1>
+    </div>
+  </div>
+
+  <!-- 核心数据卡片 -->
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6" id="hero-stats">
+    <div class="bg-white rounded-2xl border border-slate-200 p-4 text-center">
+      <div class="text-3xl font-bold text-slate-900" id="stat-total">-</div>
+      <div class="text-xs text-slate-400 mt-1 font-medium">总任务</div>
+    </div>
+    <div class="bg-white rounded-2xl border border-slate-200 p-4 text-center">
+      <div class="text-3xl font-bold text-emerald-600" id="stat-done">-</div>
+      <div class="text-xs text-slate-400 mt-1 font-medium">已完成</div>
+    </div>
+    <div class="bg-white rounded-2xl border border-slate-200 p-4 text-center">
+      <div class="text-3xl font-bold text-brand-600" id="stat-pending">-</div>
+      <div class="text-xs text-slate-400 mt-1 font-medium">进行中</div>
+    </div>
+    <div class="bg-white rounded-2xl border border-slate-200 p-4 text-center">
+      <div class="text-3xl font-bold text-amber-500" id="stat-rate">-</div>
+      <div class="text-xs text-slate-400 mt-1 font-medium">完成率</div>
+    </div>
+  </div>
+
+  <!-- 今日进度 -->
+  <div class="bg-white rounded-2xl border border-slate-200 p-5 mb-6">
+    <h2 class="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2">
+      <svg class="w-4 h-4 text-brand-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      今日进度
+    </h2>
+    <div class="flex items-center gap-4">
+      <div class="relative w-20 h-20 flex-shrink-0">
+        <svg class="w-20 h-20 -rotate-90" viewBox="0 0 80 80">
+          <circle cx="40" cy="40" r="34" fill="none" stroke="#f1f5f9" stroke-width="8"/>
+          <circle id="today-ring" cx="40" cy="40" r="34" fill="none" stroke="#4f46e5" stroke-width="8"
+                  stroke-linecap="round" stroke-dasharray="213.6" stroke-dashoffset="213.6" style="transition: stroke-dashoffset 0.8s ease"/>
+        </svg>
+        <div class="absolute inset-0 flex items-center justify-center">
+          <span class="text-lg font-bold text-brand-600" id="today-pct">0%</span>
+        </div>
+      </div>
+      <div class="flex-1">
+        <div class="text-sm text-slate-600">今天应完成 <span class="font-bold text-slate-800" id="today-total">0</span> 个</div>
+        <div class="text-sm text-slate-600 mt-1">已完成 <span class="font-bold text-emerald-600" id="today-done">0</span> 个</div>
+        <div class="text-sm text-slate-600 mt-1">剩余 <span class="font-bold text-amber-600" id="today-remaining">0</span> 个</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 完成趋势（近 14 天柱状图） -->
+  <div class="bg-white rounded-2xl border border-slate-200 p-5 mb-6">
+    <h2 class="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2">
+      <svg class="w-4 h-4 text-brand-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+      近 14 天完成趋势
+    </h2>
+    <div id="chart-bars" class="w-full"></div>
+  </div>
+
+  <!-- 连续完成天数 + 最佳纪录 -->
+  <div class="grid grid-cols-2 gap-3 mb-6">
+    <div class="bg-gradient-to-br from-brand-50 to-brand-100 rounded-2xl border border-brand-200 p-4 text-center">
+      <div class="text-3xl font-bold text-brand-700" id="stat-streak">0</div>
+      <div class="text-xs text-brand-500 mt-1 font-medium">当前连续天数 🔥</div>
+    </div>
+    <div class="bg-gradient-to-br from-amber-50 to-amber-100 rounded-2xl border border-amber-200 p-4 text-center">
+      <div class="text-3xl font-bold text-amber-700" id="stat-best">0</div>
+      <div class="text-xs text-amber-500 mt-1 font-medium">最佳连续纪录 🏆</div>
+    </div>
+  </div>
+
+  <!-- 分类完成情况 -->
+  <div class="bg-white rounded-2xl border border-slate-200 p-5 mb-6">
+    <h2 class="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2">
+      <svg class="w-4 h-4 text-brand-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/></svg>
+      分类完成情况
+    </h2>
+    <div id="category-bars" class="space-y-3"></div>
+  </div>
+
+  <!-- 优先级分布 -->
+  <div class="bg-white rounded-2xl border border-slate-200 p-5 mb-6">
+    <h2 class="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2">
+      <svg class="w-4 h-4 text-brand-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
+      优先级分布
+    </h2>
+    <div id="priority-bars" class="space-y-3"></div>
+  </div>
+
+  <!-- 里程碑 -->
+  <div class="bg-white rounded-2xl border border-slate-200 p-5 mb-6">
+    <h2 class="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2">
+      <svg class="w-4 h-4 text-brand-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/></svg>
+      里程碑
+    </h2>
+    <div id="milestones" class="space-y-2"></div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const RECURRENCE_LABEL = {daily:'每天', weekly:'每周', biweekly:'双周', monthly:'每月', custom:'自定义'};
+let allCategories = [];
+let allTodos = [];
+
+async function loadCategories() {
+  const r = await apiFetch('/api/categories', {silent: true});
+  if (r.ok) allCategories = r.data;
+}
+
+async function loadAll() {
+  const [tr, cr] = await Promise.all([
+    apiFetch('/api/todos', {silent: true}),
+    apiFetch('/api/categories', {silent: true}),
+  ]);
+  if (!tr.ok || !cr.ok) { showToast('加载统计数据失败', 'error'); return; }
+  renderAll(tr.data, cr.data);
+}
+
+function renderAll(todos, categories) {
+  const total = todos.length;
+  const done = todos.filter(t => t.status === 'done');
+  const pending = todos.filter(t => t.status === 'pending');
+  const doneCount = done.length;
+  const pendingCount = pending.length;
+  const rate = total > 0 ? Math.round(doneCount / total * 100) : 0;
+
+  document.getElementById('stat-total').textContent = total;
+  document.getElementById('stat-done').textContent = doneCount;
+  document.getElementById('stat-pending').textContent = pendingCount;
+  document.getElementById('stat-rate').textContent = rate + '%';
+
+  renderToday(todos);
+  renderChart(done);
+  renderStreak(done);
+  renderCategoryBars(todos, categories);
+  renderPriorityBars(todos);
+  renderMilestones(doneCount);
+}
+
+function renderToday(todos) {
+  const todayStr = localDateStr();  // 本地日期，与后端 due_date(CST) 一致
+  const todayTodos = todos.filter(t => t.due_date === todayStr);
+  const todayDone = todayTodos.filter(t => t.status === 'done').length;
+  const todayTotal = todayTodos.length;
+  const pct = todayTotal > 0 ? Math.round(todayDone / todayTotal * 100) : 0;
+
+  document.getElementById('today-total').textContent = todayTotal;
+  document.getElementById('today-done').textContent = todayDone;
+  document.getElementById('today-remaining').textContent = todayTotal - todayDone;
+  document.getElementById('today-pct').textContent = pct + '%';
+
+  // 环形进度条
+  const circumference = 213.6;
+  const offset = circumference - (circumference * pct / 100);
+  document.getElementById('today-ring').style.strokeDashoffset = offset;
+}
+
+function renderChart(doneTodos) {
+  const container = document.getElementById('chart-bars');
+  const days = [];
+  for (let i = 13; i >= 0; i--) {
+    const d = new Date(); d.setDate(d.getDate() - i);
+    days.push(localDateStr(d));  // 本地日期
+  }
+
+  const counts = {};
+  for (const d of doneTodos) {
+    if (!d.completed_at) continue;
+    const day = localDateFromISO(d.completed_at);  // 本地日期（带时区的 ISO 转本地）
+    if (day) counts[day] = (counts[day] || 0) + 1;
+  }
+
+  const values = days.map(d => counts[d] || 0);
+  const max = Math.max(1, ...values);
+  const shortDays = ['日','一','二','三','四','五','六'];
+
+  // SVG 折线图参数
+  const W = 320, H = 130;           // viewBox 宽高
+  const padL = 8, padR = 8, padT = 18, padB = 20;
+  const innerW = W - padL - padR;
+  const innerH = H - padT - padB;
+  const step = innerW / (values.length - 1);
+  // 每个数据点的坐标
+  const pts = values.map((v, i) => ({
+    x: padL + i * step,
+    y: padT + innerH - (v / max) * innerH,
+    v,
+  }));
+  const linePath = pts.map((p, i) => (i === 0 ? 'M' : 'L') + p.x.toFixed(1) + ',' + p.y.toFixed(1)).join(' ');
+  const areaPath = linePath + ` L${pts[pts.length-1].x.toFixed(1)},${(padT+innerH)} L${pts[0].x.toFixed(1)},${(padT+innerH)} Z`;
+  const totalDone = values.reduce((a, b) => a + b, 0);
+
+  container.innerHTML = `
+  <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" class="w-full" style="height:130px;">
+    <defs>
+      <linearGradient id="chartAreaGrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#6366f1" stop-opacity="0.25"/>
+        <stop offset="100%" stop-color="#6366f1" stop-opacity="0"/>
+      </linearGradient>
+    </defs>
+    <!-- 基线 -->
+    <line x1="${padL}" y1="${padT+innerH}" x2="${W-padR}" y2="${padT+innerH}" stroke="#e2e8f0" stroke-width="1"/>
+    <!-- 渐变填充区域 -->
+    <path d="${areaPath}" fill="url(#chartAreaGrad)"/>
+    <!-- 折线 -->
+    <path d="${linePath}" fill="none" stroke="#6366f1" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+    <!-- 数据点 + 数值 -->
+    ${pts.map((p, i) => {
+      const isToday = i === pts.length - 1;
+      return `
+      <circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${isToday ? 3.5 : 2.5}" fill="${isToday ? '#4f46e5' : '#6366f1'}"/>
+      ${p.v > 0 ? `<text x="${p.x.toFixed(1)}" y="${(p.y-6).toFixed(1)}" text-anchor="middle" font-size="9" fill="${isToday ? '#4f46e5' : '#94a3b8'}" font-weight="${isToday ? '700' : '500'}">${p.v}</text>` : ''}`;
+    }).join('')}
+    <!-- x 轴星期 -->
+    ${pts.map((p, i) => {
+      const d = new Date(days[i] + 'T00:00:00');
+      const isToday = i === pts.length - 1;
+      return `<text x="${p.x.toFixed(1)}" y="${H - 5}" text-anchor="middle" font-size="9" fill="${isToday ? '#4f46e5' : '#94a3b8'}" font-weight="${isToday ? '700' : '400'}">${shortDays[d.getDay()]}</text>`;
+    }).join('')}
+  </svg>
+  <div class="text-xs text-slate-400 text-center mt-1">近 14 天共完成 <span class="font-bold text-brand-600">${totalDone}</span> 个</div>`;
+}
+
+function renderStreak(doneTodos) {
+  // 计算连续完成天数
+  const days = new Set();
+  for (const t of doneTodos) {
+    if (t.completed_at) {
+      const day = localDateFromISO(t.completed_at);  // 本地日期
+      if (day) days.add(day);
+    }
+  }
+
+  let streak = 0;
+  const today = new Date();
+  for (let i = 0; i < 365; i++) {
+    const d = new Date(today); d.setDate(d.getDate() - i);
+    const key = localDateStr(d);  // 本地日期
+    if (days.has(key)) {
+      streak++;
+    } else {
+      // 允许今天还没完成的情况，从昨天开始算
+      if (i === 0) continue;
+      break;
+    }
+  }
+
+  // 计算最佳连续纪录
+  const sortedDays = [...days].sort();
+  let best = 0, current = 0;
+  for (let i = 0; i < sortedDays.length; i++) {
+    if (i === 0) { current = 1; }
+    else {
+      const prev = new Date(sortedDays[i-1] + 'T00:00:00');
+      const curr = new Date(sortedDays[i] + 'T00:00:00');
+      const diff = (curr - prev) / 86400000;
+      current = diff === 1 ? current + 1 : 1;
+    }
+    best = Math.max(best, current);
+  }
+  if (sortedDays.length === 0) best = 0;
+
+  document.getElementById('stat-streak').textContent = streak;
+  document.getElementById('stat-best').textContent = best;
+}
+
+function renderCategoryBars(todos, categories) {
+  const container = document.getElementById('category-bars');
+  const catMap = {};
+  categories.forEach(c => catMap[c.id] = c);
+  catMap[null] = {name: '未分类', color: '#94a3b8'};
+
+  const stats = {};
+  for (const t of todos) {
+    const cid = t.category_id;
+    if (!stats[cid]) stats[cid] = {total: 0, done: 0};
+    stats[cid].total++;
+    if (t.status === 'done') stats[cid].done++;
+  }
+
+  const entries = Object.entries(stats).sort((a, b) => b[1].total - a[1].total);
+  if (entries.length === 0) {
+    container.innerHTML = '<p class="text-xs text-slate-400 text-center py-4">暂无数据</p>';
+    return;
+  }
+
+  container.innerHTML = entries.map(([cid, s]) => {
+    const cat = catMap[parseInt(cid)] || catMap[null];
+    const pct = s.total > 0 ? Math.round(s.done / s.total * 100) : 0;
+    return `<div>
+      <div class="flex items-center justify-between mb-1">
+        <span class="text-xs font-medium text-slate-700 flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full" style="background-color:${cat.color}"></span>${cat.name || '未分类'}
+        </span>
+        <span class="text-xs text-slate-400">${s.done}/${s.total} · ${pct}%</span>
+      </div>
+      <div class="h-2 rounded-full bg-slate-100 overflow-hidden">
+        <div class="h-full rounded-full transition-all" style="width:${pct}%; background-color:${cat.color}"></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderPriorityBars(todos) {
+  const container = document.getElementById('priority-bars');
+  const prioInfo = {
+    high: {label: '高优先级', color: '#dc2626', bg: '#fef2f2'},
+    medium: {label: '中优先级', color: '#f59e0b', bg: '#fffbeb'},
+    low: {label: '低优先级', color: '#94a3b8', bg: '#f8fafc'},
+  };
+
+  const stats = {high: {total:0, done:0}, medium: {total:0, done:0}, low: {total:0, done:0}};
+  for (const t of todos) {
+    const p = stats[t.priority] || stats.medium;
+    p.total++;
+    if (t.status === 'done') p.done++;
+  }
+
+  container.innerHTML = Object.entries(stats).map(([key, s]) => {
+    const info = prioInfo[key];
+    const pct = s.total > 0 ? Math.round(s.done / s.total * 100) : 0;
+    return `<div>
+      <div class="flex items-center justify-between mb-1">
+        <span class="text-xs font-medium" style="color:${info.color}">${info.label}</span>
+        <span class="text-xs text-slate-400">${s.done}/${s.total} · ${pct}%</span>
+      </div>
+      <div class="h-2 rounded-full overflow-hidden" style="background-color:${info.bg}">
+        <div class="h-full rounded-full transition-all" style="width:${pct}%; background-color:${info.color}"></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderMilestones(doneCount) {
+  const container = document.getElementById('milestones');
+  const milestones = [
+    {need: 1, icon: '🌱', label: '初出茅庐', desc: '完成第 1 个任务'},
+    {need: 10, icon: '🌿', label: '渐入佳境', desc: '完成 10 个任务'},
+    {need: 50, icon: '🌳', label: '独当一面', desc: '完成 50 个任务'},
+    {need: 100, icon: '⭐', label: '百战百胜', desc: '完成 100 个任务'},
+    {need: 500, icon: '👑', label: '登峰造极', desc: '完成 500 个任务'},
+  ];
+
+  container.innerHTML = milestones.map(m => {
+    const achieved = doneCount >= m.need;
+    const progress = Math.min(doneCount / m.need, 1);
+    return `<div class="flex items-center gap-3 p-2.5 rounded-xl ${achieved ? 'bg-brand-50' : 'bg-slate-50'}">
+      <div class="text-2xl ${achieved ? '' : 'grayscale opacity-40'}">${m.icon}</div>
+      <div class="flex-1 min-w-0">
+        <div class="text-sm font-semibold ${achieved ? 'text-brand-700' : 'text-slate-500'}">${m.label}</div>
+        <div class="text-xs text-slate-400">${m.desc}</div>
+      </div>
+      <div class="text-xs font-bold ${achieved ? 'text-brand-600' : 'text-slate-400'}">${achieved ? '✓' : doneCount + '/' + m.need}</div>
+    </div>`;
+  }).join('');
+}
+
+(async () => {
+  await loadCategories();
+  await loadAll();
+})();
+</script>
+{% endblock %}
