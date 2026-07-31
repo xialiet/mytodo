@@ -655,7 +655,7 @@ async function doCheckin(id) {
       const wasReached = it.target_per_day > 0 && it.today_count >= it.target_per_day;
       it.today_count++;
       const nowReached = it.target_per_day > 0 && it.today_count >= it.target_per_day;
-      const data = await r.json();
+      const data = r.data;
       it.today_logs = [{id: data.id, checked_at: data.checked_at}, ...(it.today_logs || [])].slice(0, 5);
       // 更新 logsMap（今日 +1）
       if (logsMap[id]) {
